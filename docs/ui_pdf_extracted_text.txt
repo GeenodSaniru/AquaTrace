@@ -1,0 +1,677 @@
+Okkoma damma
+Welcome back
+Sign in to continue to AquaTrace
+Email Address
+you@example.com
+Password
+Enter your password
+Forgot Password?
+Sign In
+or continue wit h
+G Continue wit h Google
+Continue wit h Apple
+demo role access
+C
+A
+Don't have an account? Create Account
+→
+T
+Demo Citizen
+citizen@demo.com
+Demo Technician
+tech@demo.com
+Demo Admin
+admin@demo.com
+→
+→
+AquaTrace
+Good afternoon,
+Home Map Repor ts Aler ts Pro f ile
+Amal Perera
+Colombo 03
+View Map
+My Rep or ts
+Pipe L eak
+Galle Road, Colombo 03
+AT-2 026- 00124
+Pipe L eak
+Duplication Road, Colombo 03
+AT-2 026- 00128
+Assigned
+Pipe L eak
+Galle Road, Colombo 03
+Pipe L eak
+Duplication Road, Colombo 03
+2
+Active
+N earby Active Rep airs
+Repor t Water Fault
+0
+Completed
+My Repor ts
+View all
+Ongo ing
+Ongo ing
+Assigned
+2
+Nearby
+2 Fault Map
+Search location
+© OpenStreet M ap contributors
+Home Map Repor ts Aler ts Pro f ile
+Pending Assigned Ongoing Completed Disputed
+Filter
++
+−
+Home Map Repor ts Aler ts Pro f ile
+My Rep or ts
+Active Completed Disputed All
+Pip e L eak Ongo ing
+Galle Road, Colombo 03
+AT-2 026- 00124 · 9/24/2 026
+High
+Burst Pip e Pending
+M ain Street, M aharagama
+AT-2 026- 00125 · 9/24/2 026
+Critical
+Road Water F low Comp le ted
+H ighlevel Road, Kottawa
+AT-2 026- 00126 · 9/2 3 /2 026
+Medium
+D amaged Pip e D isputed
+Park Road, Nugegoda
+AT-2 026- 0012 7 · 9/22/2 026
+High
+Pip e L eak Assigned
+Duplication Road, Colombo 03
+AT-2 026- 00128 · 9/24/2 026
+L ow
+N o tificatio ns
+N ew 2
+Technician Assigned
+Your repor t AT-2 026- 00124 has been assigned to
+K asun J ayawardena.
+2 h ago
+Verify Rep air
+Repair completed for AT-2 026- 00126. Please verify
+whet her t he issue has been resolved.
+5 h ago
+Earlier
+Rep or t App roved
+Your repor t AT-2 026- 00128 has been verified by
+admin and is now assigned.
+1 d ago
+D ispute Opened
+A dispute has been raised on AT-2 026- 0012 7. Admin
+is reviewing.
+2 d ago
+Home Map Repor ts Aler ts Pro f ile
+M ark all read
+Pro file
+Pre fere nces
+Dark Mode
+Dark appearance is active
+Push N oti f ications
+Repor t updates and aler ts
+Repor ts Aler ts Pro f ile
+For accurate fault repor ting
+S ettings & Supp or t
+Edit Pro f ile
+N oti f ication Settings
+L ocation Settings
+Privacy
+Accessib ility
+Help & Suppor t
+HomeL ocation Ser vicesMap
+Amal Perera
+amal.perera@example.com
+Colombo 03
+COMMUN IT Y CIT IZEN
+Account Informatio n
+Full Name
+Amal Perera
+Email
+amal . perera@example. com
+Phone
++94 7 7 123 4567
+Area
+Colom b o 03
+Edit
+Change Profile Picture
+Full N ame
+Amal Perera
+Email Address
+amal.perera@example.com
+Phone N um b er
++94 7 7 12 3 456 7
+Save Profile
+Edit Pro file
+Edit Pro file
+Update your personal and contact details.
+Change Profile Picture
+Full N ame
+Amal Perera
+Email Address
+amal.perera@example.com
+Phone N um b er
++94 7 7 12 3 456 7
+Save Profile
+Edit Pro file
+New profile picture selected. Save your profile
+to apply it.
+Edit Pro file
+Update your personal and contact details.
+Welcome back
+Sign in to continue to AquaTrace
+Email Address
+you@example.com
+Password
+Enter your password
+Forgot Password?
+Sign In
+or continue wit h
+G Continue wit h Google
+Continue wit h Apple
+demo role access
+C
+A
+Don't have an account? Create Account
+→
+T
+Demo Citizen
+citizen@demo.com
+Demo Technician
+tech@demo.com
+Demo Admin
+admin@demo.com
+→
+→
+AquaTrace
+Good afternoon,
+AquaTrace
+Technician
+Kas
+un Jayawardena
+W B-2 024-087 · Colombo Nor t h
+1 1
+New Ongoing
+Amal Perera
+Colombo 03
+Home Map Repor ts
+Ongo ing
+Aler ts Pro f ile
+Assigned
+HomeJo b s Map Aler ts Pro f ile
+N ext Job
+AT-2 026- 00128
+Pip e L eak
+Duplication Road, Colombo 03
+View J ob
+View Map
+My Rep or ts
+Pipe L eak
+Galle Road, Colombo 03
+AT-2 026- 00124
+Pipe L eak
+Duplication Road, Colombo 03
+AT-2 026- 00128
+Assigned
+Jo b QueueN avigate
+Active Jobs
+Pipe L eak
+Duplication Road, Colombo 03
+Pipe L eak
+Galle Road, Colombo 03
+Histor y
+View all
+Assigned
+Ongo ing
+Pipe L eak
+Galle Road, Colombo 03
+Pipe L eak
+Duplication Road, Colombo 03
+2
+Active
+N earby Active Rep airs
+Repor t Water Fault
+0
+Completed
+My Repor ts
+View all
+Ongo ing
+1
+Completed
+Assigned
+L ow
+2
+Nearby
+2
+2
+Fault Map
+Search location
+© OpenStreet M ap contributors
+Home Map Repor ts Aler ts Pro f ile
+HomeJo b s Map Aler ts Pro f ile
+My Jobs
+N ewO ngoing
+AT-2026-00128
+Pip e L eak
+Duplication Road, Colombo 03
+Assigned: 9/24/2 026, 9
+:45:00 AM
+View J ob
+Pending Assigned Ongoing Completed Disputed
+Completed
+Assigned
+L ow
+Filter
++
+−
+3.4 km
+distance
+12 min
+ETA
+Fault AT-2026-00124
+Pip e L eak
++
+−
+Home Map Repor ts Aler ts Pro f ile
+Galle Road, Colom b o 03
+Star t Navigation
+My Rep or ts
+Active Completed Disputed All
+Pip e L eak Ongo ing
+Galle Road, Colombo 03
+AT-2 026- 00124 · 9/24/2 026
+High
+Burst Pip e Pending
+M ain Street, M aharagama
+AT-2 026- 00125 · 9/24/2 026
+Critical
+Road Water F low Comp le ted
+H ighlevel Road, Kottawa
+AT-2 026- 00126 · 9/2 3 /2 026
+Medium
+D amaged Pip e D isputed
+Park Road, Nugegoda
+AT-2 026- 0012 7 · 9/22/2 026
+High
+Pip e L eak Assigned
+Duplication Road, Colombo 03
+AT-2 026- 00128 · 9/24/2 026
+L ow
+N avigate to Fault
+~12 min
+High
+N o tificatio ns
+N ew 2
+Technician Assigned
+Your repor t AT-2 026- 00124 has been assigned to
+K asun J ayawardena.
+2 h ago
+Verify Rep air
+Repair completed for AT-2 026- 00126. Please verify
+whet her t he issue has been resolved.
+5 h ago
+Earlier
+Rep or t App roved
+Your repor t AT-2 026- 00128 has been verified by
+admin and is now assigned.
+1 d ago
+D ispute Opened
+A dispute has been raised on AT-2 026- 0012 7. Admin
+is reviewing.
+2 d ago
+HomeJo b s Map Aler ts Pro f ile
+N o tificatio ns
+N ew 2
+Technician Assigned
+Your repor t AT-2 026- 00124 has been assigned to
+K asun J ayawardena.
+2 h ago
+Verify Rep air
+Repair completed for AT-2 026- 00126. Please verify
+whet her t he issue has been resolved.
+5 h ago
+Earlier
+Rep or t App roved
+Your repor t AT-2 026- 00128 has been verified by
+admin and is now assigned.
+1 d ago
+D ispute Opened
+A dispute has been raised on AT-2 026- 0012 7. Admin
+is reviewing.
+2 d ago
+Home Map Repor ts Aler ts Pro f ile
+M ark all read
+M ark all read
+Pre fere nces
+Dark Mode
+L ight appearance is active
+Push N oti f ications
+Repor t updates and aler ts
+Repor ts Aler ts Pro f ile
+For accurate fault repor ting
+S ettings & Supp or t
+Edit Pro f ile
+N oti f ication Settings
+L ocation Settings
+Privacy
+Accessib ility
+Help & Suppor t
+A b out AquaTrace
+S ign Out
+Pro file
+AquaTrace v1.0.0 · National Water Board Sri Lanka
+HomeS ettings & Supp or tJo b s
+Kas
+un Jayawardena
+kasun.j@waterboard.lk
+W B-2 024-087 · Colombo Nor t h
+F IEL D T ECHN ICIAN
+Account Informatio n
+Full Name
+Kasun Jayawardena
+Email
+k asun . j@waterb oard . lk
+Phone
++94 71 98 7 6543
+Area
+Colom b o N or t h
+Employee ID
+WB-2024-08 7
+Pre fere nces
+Dark Mode
+L ight appearance is active
+Push N oti f ications
+Repor t updates and aler ts
+L ocation Ser vices
+For accurate fault repor ting
+Map Aler ts Pro f ile
+Edit Pro f ile
+N oti f ication Settings
+L ocation Settings
+Pro file
+HomeL ocation Ser vicesMap
+Amal Perera
+amal.perera@example.com
+Colombo 03
+COMMUN IT Y CIT IZEN
+Account Informatio n
+Full Name
+Amal Perera
+Email
+amal . perera@example. com
+Phone
++94 7 7 123 4567
+Area
+Colom b o 03
+Edit
+Edit
+AquaTrace v1.0.0 · National Water Board Sri LankaChoose which AquaTrace updates you
+receive.
+A b out AquaTrace
+N o tificatio n S ettings
+Repor t Updates
+Status changes for repor ts you su b mitted
+N earby Faults
+Impor tant repor ts in your local area
+Repair Verif ication
+Re
+quests to verif y completed repairs
+Email Summar y
+A week ly AquaTrace activity summar y
+Save Notifications
+S ign Out
+N o tificatio n S ettings L ocatio n S ettings
+Control location access and your ser vice
+area.
+L ocation Ser vices
+Use GP S for accurate fault repor ting
+Primar y Area
+Select an option
+Used for nearby repor ts and aler ts
+Save Location
+L ocatio n S ettings
+L ocatio n S ettings
+Control location access and your ser vice
+area.
+L ocation Ser vices
+Use GP S for accurate fault repor ting
+Primar y Area
+M aharagama
+Used for nearby repor ts and aler ts
+Save Location
+L ocatio n S ettings
+Location preferences saved successfully.
+Privacy
+M anage data sharing and account security.
+Community Veri f ication
+Allow nearby citizens to verif y repairs
+Anonymous Repor ts
+Hide your name on pub lic fault repor ts
+Usage Analytics
+Help improve A
+quaTrace wit h anonymous
+usage data
+Download M y Data
+Privacy
+Your data expor t is being prepared.
+Accessibility
+Adjust reading size and visual contrast.
+Text Size
+Standard
+Changes text t hroughout t he entire app
+High Contrast Mode
+Stronger text, b order, and control contrast
+Previ ew h eading
+Readable primar y text
+Suppor ting information remains clear.
+Accessibility Accessibility
+Accessibility
+Adjust reading size and visual
+contrast.
+Text Size
+Extra Large
+Changes text t hroughout t he entire app
+High Contrast Mode
+Stronger text, b order, and
+control contrast
+Previ ew h eading
+Readable primar y text
+Suppor ting information remains clear.
+Text size updated across AquaTrace.
+H ow do I repor t a fault?
+Open H ome and select Repor t a Water Fault. Add
+a photo, confirm t he location, and submit.
+H ow do I verify a repair?
+Who can see my repor ts?
+Contact Suppor t
+Suppor t request star ted. The Water Board
+help desk will contact you.
+H el p & Supp or t
+H el p & Supp or t
+Get answers or contact t he AquaTrace team.
+AquaTrace
+Repor t · Repair · Verify
+Version 1.0.0
+A community-powered water infrastructure
+platform for t he National Water Board of Sri
+Lanka.
+Privacy Policy
+Terms of Ser vice
+About AquaTrace
+About AquaTrace
+Water infrastructure repor ting for ever y
+community.
+Dashb oard Map
+Critical / High Prior ity
+Activity Pro f ile
+Admin D ash board
+Admin · Water Board
+D ilani Wickramasinghe
+Tuesday, November 3, 2 026
+Burst Pip e
+M ain Street, M aharagama
+Sep 1
+Quick Actio ns
+1 1
+Ongoing Completed
+Rep or t Trend — S ep 2026
+5
+Total
+Revi ew Rep or ts
+1 pending review
+Assign Technician
+Assign to verified repor ts
+View Map
+All faults on map
+Manage D isputes
+1 active disputes
+Repor ts
+1
+Pending
+1
+Assigned
+1
+Disputed
+Pending
+Critical
+Sep 14
+2
+Dashb oard Repor ts Map Activity Pro f ile
+Revi ew Rep or ts
+All Pending High Priority Critical Verif ied Disputed
+Pip e L eak Ongo ing
+Galle Road, Colombo 03
+High Amal Perera · 9/24/2 026
+Burst Pip e Pending
+M ain Street, M aharagama
+Critical Nirmala Silva · 9/24/2 026
+Road Water F low Comp le ted
+H ighlevel Road, Kottawa
+Medium Ruwan Fernando · 9/2 3 /2 026
+D amaged Pip e D isputed
+Park Road, Nugegoda
+High Chamara Bandara · 9/22/2 026
+Pip e L eak Assigned
+Duplication Road, Colombo 03
+L ow Amal Perera · 9/24/2 026
+Dashb oard Repor ts Map Activity Pro f ile
+Fault Map
+Search location
+© OpenStreet M ap contributors
+Pending Assigned Ongoing Completed Disputed
+Filter
++
+−
+Dashb oard Repor ts Map Activity Pro f ile
+Repor t
+AT-2026 -00 124
+Pipe Leak · Galle Road, Colombo 03
+24 Sep 2 026 – 1 0:3 2 AM
+Rep or t S ubmitted
+Citizen submitted repor t for pipe leak at Galle Road.
+Amal Perera
+24 Sep 2 026 – 11:05 AM
+Rep or t Verified
+Admin verified and approved t he repor t. Priority set to
+H igh.
+Dilani Wickramasinghe
+24 Sep 2 026 – 11:2 0 AM
+Technician Assigned
+K asun J ayawardena assigned to repair. ETA 45 minutes.
+Dilani Wickramasinghe
+24 Sep 2 026 – 1:15 PM
+Rep air S tar ted
+Technician arrived and star ted repair work.
+K asun J ayawardena
+24 Sep 2 026 – 2:05 PM
+Rep air Comp le ted
+Repair marked completed. After-repair photos uploaded.
+K asun J ayawardena
+24 Sep 2 026 – 3:1 0 PM
+Community Verified
+3 nearby citizens confirmed t he repair is complete.
+Community
+Community Verified ✓
+3 nearby citizens confirmed t his repair is complete.
+Activity Histor y
+Verified
+AquaTrace v1.0.0 · National Water Board Sri Lanka
+WAT ER BOARD AD MIN
+Pre fere nces
+Dark Mode
+L ight appearance is active
+Push N oti f ications
+Repor t updates and aler ts
+L ocation Ser vices
+For accurate fault repor ting
+Dashb oard Repor ts Map Activity Pro f ile
+S ettings & Supp or t
+Edit Pro f ile
+N oti f ication Settings
+L ocation Settings
+Privacy
+Accessib ility
+Help & Suppor t
+A b out AquaTrace
+S ign Out
+AquaTrace v1.0.0 · National Water Board Sri Lanka
+Privacy
+Pro file
+Accessib ility
+Help & Suppor t
+A b out AquaTrace
+Account Informatio n
+Full Name
+Dilani Wick ramasinghe
+Email
+dilani . w@waterb oard . lk
+Phone
++94 11 234 5678
+D ilani Wickramasinghe
+dilani.w@waterboard.lkS ign Out
+National Water Board · Sri Lanka
+Edit
+Assign Technician Fault D etails
+Fault to Assign
+AT-2 026- 00125
+Burst Pip e
+M ain Street, M aharagama
+M ain water pipe burst near market.
+Available Technicians
+Kas
+un Jayawardena Available
+Colombo Nor t h · 2 active jobs ·
+3.4 km away
+Ni mal Fernando Busy
+Colombo Sout h · 4 active jobs ·
+7.2 km away
+S ure sh Gunawardena Available
+Colombo Central · 1 active jobs ·
+5.1 km away
+Assign Technician
+Critical
+Pending
+AT-2026-00125
+Critical
+Burst Pip e
+Emergency resp o nse reque sted
+Mark t his fault as an emergency
+Anyone can f lag an immediate pu b lic
+sa fety risk for priority review
+Location
+Main Street, Maharagama
+Repor ted
+9/24 /2026, 9:15:00 AM
+Fault Type
+Burst Pipe
+Description
+M ain water pipe burst near market. Water
+gushing out continuously causing flooding.
+Rep air Pro gress
+Repor ted Verified Assigned RepairingCompleted Verified
+Rep air Evidence
+Before
+Assign Technician

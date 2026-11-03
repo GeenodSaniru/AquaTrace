@@ -1,0 +1,39 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "aquatrace-92e2e",
+          "appId": "1:298509402653:android:db2fc54fac90b6b5b47cf4",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "aquatrace-92e2e",
+          "appId": "1:298509402653:ios:e62995a1bb869e46b47cf4",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "aquatrace-92e2e",
+          "appId": "1:298509402653:ios:e62995a1bb869e46b47cf4",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "web": {
+        "default": {
+          "projectId": "aquatrace-92e2e",
+          "appId": "1:298509402653:web:cca7d1291ccb34d9b47cf4"
+        }
+      }
+    }
+  }
+}

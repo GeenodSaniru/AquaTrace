@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyAMoKCxdkpx8_Lg0scssC2r2Eufd_iiToM</string>
+	<key>GCM_SENDER_ID</key>
+	<string>298509402653</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.aquatrace.aquatrace</string>
+	<key>PROJECT_ID</key>
+	<string>aquatrace-92e2e</string>
+	<key>STORAGE_BUCKET</key>
+	<string>aquatrace-92e2e.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:298509402653:ios:e62995a1bb869e46b47cf4</string>
+</dict>
+</plist>

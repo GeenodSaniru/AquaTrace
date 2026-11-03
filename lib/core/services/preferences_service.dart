@@ -1,0 +1,62 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Centralized local persistent preferences store for AquaTrace user settings.
+class PreferencesService {
+  static const String _keyPushNotifications = 'pref_push_notifications';
+  static const String _keyLocationServices = 'pref_location_services';
+  static const String _keyPrimaryArea = 'pref_primary_area';
+  static const String _keyTextSize = 'pref_text_size';
+  static const String _keyHighContrast = 'pref_high_contrast';
+  static const String _keyAnonymousReports = 'pref_anonymous_reports';
+  static const String _keyCommunityVerification = 'pref_community_verification';
+  static const String _keyLastAuthUid = 'pref_last_auth_uid';
+
+  final SharedPreferences _prefs;
+
+  PreferencesService(this._prefs);
+
+  static Future<PreferencesService> create() async {
+    final prefs = await SharedPreferences.getInstance();
+    return PreferencesService(prefs);
+  }
+
+  bool get pushNotificationsEnabled =>
+      _prefs.getBool(_keyPushNotifications) ?? true;
+  Future<void> setPushNotificationsEnabled(bool value) =>
+      _prefs.setBool(_keyPushNotifications, value);
+
+  bool get locationServicesEnabled =>
+      _prefs.getBool(_keyLocationServices) ?? true;
+  Future<void> setLocationServicesEnabled(bool value) =>
+      _prefs.setBool(_keyLocationServices, value);
+
+  String get primaryArea => _prefs.getString(_keyPrimaryArea) ?? 'Colombo 03';
+  Future<void> setPrimaryArea(String value) =>
+      _prefs.setString(_keyPrimaryArea, value);
+
+  String get textSize => _prefs.getString(_keyTextSize) ?? 'Standard';
+  Future<void> setTextSize(String value) =>
+      _prefs.setString(_keyTextSize, value);
+
+  bool get highContrastMode => _prefs.getBool(_keyHighContrast) ?? false;
+  Future<void> setHighContrastMode(bool value) =>
+      _prefs.setBool(_keyHighContrast, value);
+
+  bool get anonymousReports => _prefs.getBool(_keyAnonymousReports) ?? false;
+  Future<void> setAnonymousReports(bool value) =>
+      _prefs.setBool(_keyAnonymousReports, value);
+
+  bool get communityVerification =>
+      _prefs.getBool(_keyCommunityVerification) ?? true;
+  Future<void> setCommunityVerification(bool value) =>
+      _prefs.setBool(_keyCommunityVerification, value);
+
+  String? get lastAuthUid => _prefs.getString(_keyLastAuthUid);
+  Future<void> setLastAuthUid(String? value) async {
+    if (value == null) {
+      await _prefs.remove(_keyLastAuthUid);
+    } else {
+      await _prefs.setString(_keyLastAuthUid, value);
+    }
+  }
+}
