@@ -1,5 +1,61 @@
 # AquaTrace — Update Log
 
+## 2026-11-03 18:12:33 +0530 (UTC+0530) — Member 1 prompts 1A–1C complete
+
+### Completed tasks (Member 1)
+- **1A:** Confirmed feature-first foundation, theme/widgets/routing/README remain intact; documented Firebase project + OAuth/setup gaps.
+- **1B:** Public registration hard-locked to **citizen**; removed privileged role ChoiceChips from `RegisterScreen`.
+- **1B:** `AuthService.updateProfile` patches only safe fields (never `role`/`email`/`uid`/`employeeId`).
+- **1B:** Documented role security model + `firestore.rules` in README §7; Google/Apple remain graceful stubs with setup notes.
+- **1C:** Added `docs/MEMBER1_HANDOFF.md` for Members 2–8; reviewed init/auth/routing contracts.
+
+### Files / modules changed
+- `lib/core/services/auth_service.dart`
+- `lib/features/auth/providers/auth_provider.dart`
+- `lib/features/auth/presentation/register_screen.dart`
+- `lib/features/auth/presentation/login_screen.dart`
+- `test/widget_test.dart`
+- `README.md`
+- `docs/MEMBER1_HANDOFF.md`
+- `firestore.rules` / `firestore.indexes.json` / `firebase.json` (from prior rules work; included in this handoff)
+
+### Tests / commands
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass |
+| `flutter analyze` | Pass — no issues |
+| `flutter test` | Pass — **10/10** |
+| `flutter run -d chrome` | Pass — debug service connected; Flutter run key commands shown |
+
+### Remaining / blockers (not Member 1 feature scope)
+- Deploy `firestore.rules` only when explicitly authorized.
+- Enable Email/Password + create Firestore DB in Console if not already.
+- Seed first admin/technician via Admin SDK.
+- Members 3–8 still own Firestore sync for reports, Storage, FCM, verification Functions.
+- macOS Firebase SPM cold build can be slow; Chrome smoke used for launch verification.
+
+---
+
+## 2026-11-03 18:03:41 +0530 (UTC+0530) — Firestore security rules (proposed, not deployed)
+
+### Completed tasks
+- Reviewed README contracts, models, `AuthService`, `DataRepository`, register UI, and UI verify/dispute references.
+- Added production-oriented `firestore.rules` covering users, notifications, reports, activity, verifications, disputes.
+- Wired `firebase.json` → `firestore.rules` + empty `firestore.indexes.json`.
+- Documented required backend/client changes (force citizen registration, Admin SDK role seed, Cloud Functions for counters).
+
+### Explicitly not done
+- **No deploy** to Firebase Console / `aquatrace-92e2e`.
+- Console security rules **unchanged**.
+- Emulator syntax load blocked: Java runtime missing on this machine (`firebase emulators:exec` failed locating JRE).
+
+### Validate later
+1. Install a JRE, then `firebase emulators:exec --only firestore --project aquatrace-92e2e "echo ok"`.
+2. Or paste `firestore.rules` into Console → Firestore → Rules Playground.
+3. Deploy only when authorized: `firebase deploy --only firestore:rules --project aquatrace-92e2e`.
+
+---
+
 ## 2026-11-03 15:08:14 +0530 (UTC+0530) — Firebase project configuration
 
 ### Completed tasks

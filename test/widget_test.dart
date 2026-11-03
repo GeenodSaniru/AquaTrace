@@ -9,6 +9,7 @@ import 'package:aquatrace/core/services/data_repository.dart';
 import 'package:aquatrace/core/services/preferences_service.dart';
 import 'package:aquatrace/core/theme/theme_provider.dart';
 import 'package:aquatrace/features/auth/presentation/login_screen.dart';
+import 'package:aquatrace/features/auth/presentation/register_screen.dart';
 import 'package:aquatrace/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -200,5 +201,57 @@ void main() {
         );
       },
     );
+  });
+
+  group('Auth security (Member 1B)', () {
+    test('Public registration always creates a citizen role', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final authService = AuthService(PreferencesService(prefs));
+
+      final user = await authService.registerWithEmailAndPassword(
+        email: 'new.citizen@example.com',
+        password: 'secret12',
+        displayName: 'New Citizen',
+        phoneNumber: '+94 77 000 1111',
+        assignedArea: 'Colombo 05',
+      );
+
+      expect(user.role, UserRole.citizen);
+      expect(user.email, 'new.citizen@example.com');
+      expect(authService.currentUser?.role, UserRole.citizen);
+    });
+
+    testWidgets('Register screen has no privileged role picker', (
+      WidgetTester tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService(prefs);
+      final authService = AuthService(prefsService);
+      final authProvider = AuthProvider(authService);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+            Provider<PreferencesService>.value(value: prefsService),
+            Provider<AuthService>.value(value: authService),
+            ChangeNotifierProvider.value(value: authProvider),
+            ChangeNotifierProvider(create: (_) => DataRepository()),
+          ],
+          child: const MaterialApp(home: RegisterScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Join AquaTrace'), findsOneWidget);
+      expect(find.text('Create Citizen Account'), findsOneWidget);
+      expect(find.text('Select Account Role'), findsNothing);
+      // Privileged role ChoiceChips removed (copy may still mention staff roles).
+      expect(find.widgetWithText(ChoiceChip, 'Citizen'), findsNothing);
+      expect(find.widgetWithText(ChoiceChip, 'Technician'), findsNothing);
+      expect(find.widgetWithText(ChoiceChip, 'Admin'), findsNothing);
+    });
   });
 }

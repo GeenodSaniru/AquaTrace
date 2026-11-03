@@ -143,12 +143,15 @@ class AuthService {
     }
   }
 
+  /// Public self-registration always creates a **citizen** profile.
+  ///
+  /// Technician/Admin roles must be granted by a trusted Admin SDK / Cloud
+  /// Function path — never by client-submitted role values (Prompt 1B).
   Future<UserModel> registerWithEmailAndPassword({
     required String email,
     required String password,
     required String displayName,
     required String phoneNumber,
-    required UserRole role,
     String assignedArea = 'Colombo 03',
   }) async {
     final trimmedEmail = email.trim();
@@ -157,6 +160,9 @@ class AuthService {
         'Password must be at least 6 characters.',
       );
     }
+
+    // Hard-lock: public registration cannot choose privileged roles.
+    const role = UserRole.citizen;
 
     if (FirebaseService.isRealFirebase) {
       try {
@@ -268,12 +274,23 @@ class AuthService {
 
     if (FirebaseService.isRealFirebase) {
       try {
+        // Only patch client-safe fields. Never write role/email/uid/employeeId
+        // from the client — Firestore rules reject those mutations.
+        final patch = <String, dynamic>{
+          'updatedAt': updated.updatedAt?.toIso8601String(),
+        };
+        if (displayName != null) patch['displayName'] = displayName;
+        if (phoneNumber != null) patch['phoneNumber'] = phoneNumber;
+        if (assignedArea != null) patch['assignedArea'] = assignedArea;
+        if (photoUrl != null) patch['photoUrl'] = photoUrl;
+
         await FirebaseFirestore.instance
             .collection('users')
             .doc(updated.uid)
-            .update(updated.toMap());
+            .update(patch);
       } catch (e) {
         ErrorHandler.logError(e);
+        rethrow;
       }
     }
 

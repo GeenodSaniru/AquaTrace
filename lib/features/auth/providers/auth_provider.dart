@@ -51,12 +51,13 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Public sign-up always creates a citizen account (privileged roles are
+  /// provisioned server-side only).
   Future<bool> signUp({
     required String email,
     required String password,
     required String displayName,
     required String phoneNumber,
-    required UserRole role,
     String assignedArea = 'Colombo 03',
   }) async {
     _setLoading(true);
@@ -67,7 +68,6 @@ class AuthProvider with ChangeNotifier {
         password: password,
         displayName: displayName,
         phoneNumber: phoneNumber,
-        role: role,
         assignedArea: assignedArea,
       );
       _setLoading(false);

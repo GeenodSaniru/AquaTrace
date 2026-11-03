@@ -1,0 +1,390 @@
+rules_version = '2';
+
+/**
+ * AquaTrace — production Firestore security rules
+ *
+ * Collections (from README / Dart models):
+ *   /users/{uid}
+ *   /users/{uid}/notifications/{notificationId}
+ *   /reports/{reportId}
+ *   /reports/{reportId}/activity/{activityId}
+ *   /reports/{reportId}/verifications/{voterUid}   // planned Member 7
+ *   /reports/{reportId}/disputes/{voterUid}        // planned Member 7
+ *
+ * Trust model:
+ *   - Firebase Auth uid is the only client identity signal.
+ *   - Privileged roles (technician, admin) are read from /users/{uid}.role
+ *     which clients cannot elevate. Role promotion is Admin SDK / Cloud Functions only.
+ *   - verificationCount / disputeCount / disputed status transitions are NOT
+ *     client-writable; aggregate via Cloud Functions from verification/dispute docs.
+ *
+ * Do NOT deploy until AuthService registration stops writing client-chosen roles
+ * and role promotion is moved off the client (see update.md / security review).
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------------------------------------------------------------------------
+    // Helpers
+    // --------------------------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function userDoc() {
+      return get(userPath(request.auth.uid));
+    }
+
+    function userExists() {
+      return isSignedIn() && exists(userPath(request.auth.uid));
+    }
+
+    function userRole() {
+      return userDoc().data.role;
+    }
+
+    function isCitizen() {
+      return userExists() && userRole() == 'citizen';
+    }
+
+    function isTechnician() {
+      return userExists() && userRole() == 'technician';
+    }
+
+    function isAdmin() {
+      return userExists() && userRole() == 'admin';
+    }
+
+    function isStaff() {
+      return isTechnician() || isAdmin();
+    }
+
+    function validRole(role) {
+      return role in ['citizen', 'technician', 'admin'];
+    }
+
+    function unchanged(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == resource.data[field];
+    }
+
+    function onlyChanging(allowedKeys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
+    }
+
+    function reportDoc(reportId) {
+      return get(/databases/$(database)/documents/reports/$(reportId));
+    }
+
+    function reportExists(reportId) {
+      return exists(/databases/$(database)/documents/reports/$(reportId));
+    }
+
+    function isAssignedTechnician(report) {
+      return isTechnician()
+        && report.assignedTechnicianUid == request.auth.uid;
+    }
+
+    function validFaultStatus(status) {
+      return status in ['pending', 'assigned', 'ongoing', 'completed', 'disputed'];
+    }
+
+    function validSeverity(severity) {
+      return severity in ['low', 'medium', 'high', 'critical'];
+    }
+
+    function validFaultType(faultType) {
+      return faultType in [
+        'pipeLeak',
+        'burstPipe',
+        'damagedPipe',
+        'roadWaterFlow',
+        'lowPressure',
+        'waterContamination',
+        'other'
+      ];
+    }
+
+    function validNotificationType(type) {
+      return type in ['assignment', 'verification', 'approval', 'dispute', 'update'];
+    }
+
+    // --------------------------------------------------------------------------
+    // /users/{uid}
+    // --------------------------------------------------------------------------
+
+    match /users/{uid} {
+      // Profiles are readable by signed-in users (assignment UIs need technician names).
+      // Tighten later with a publicProfiles projection if PII must be reduced.
+      allow read: if isSignedIn();
+
+      // Self-registration: document id must match Auth uid; role MUST be citizen.
+      // Privileged roles cannot be self-assigned from the client.
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.role == 'citizen'
+        && (!('employeeId' in request.resource.data)
+            || request.resource.data.employeeId == null);
+
+      // Self profile edits: never change uid, email, role, or employeeId.
+      // Admin may update role / employeeId / assignedArea for workforce management.
+      allow update: if (
+          isSelf(uid)
+          && unchanged('uid')
+          && unchanged('email')
+          && unchanged('role')
+          && unchanged('employeeId')
+          && onlyChanging([
+            'displayName',
+            'phoneNumber',
+            'assignedArea',
+            'photoUrl',
+            'updatedAt',
+            'createdAt'
+          ])
+        )
+        || (
+          isAdmin()
+          && unchanged('uid')
+          && unchanged('email')
+          && validRole(request.resource.data.role)
+          && onlyChanging([
+            'displayName',
+            'phoneNumber',
+            'role',
+            'assignedArea',
+            'employeeId',
+            'photoUrl',
+            'updatedAt',
+            'createdAt'
+          ])
+        );
+
+      // Account deletion is an Admin / Auth lifecycle concern, not a client default.
+      allow delete: if isAdmin();
+
+      // ------------------------------------------------------------------------
+      // /users/{uid}/notifications/{notificationId}
+      // ------------------------------------------------------------------------
+      match /notifications/{notificationId} {
+        allow read: if isSelf(uid) || isAdmin();
+
+        // Clients may only mark their own notifications as read.
+        allow update: if isSelf(uid)
+          && unchanged('id')
+          && unchanged('recipientUid')
+          && unchanged('title')
+          && unchanged('body')
+          && unchanged('reportId')
+          && unchanged('type')
+          && unchanged('createdAt')
+          && onlyChanging(['isRead'])
+          && request.resource.data.isRead is bool;
+
+        // Notification creation is a trusted server/admin action (assignment, disputes).
+        allow create: if isAdmin()
+          && request.resource.data.recipientUid == uid
+          && validNotificationType(request.resource.data.type);
+
+        allow delete: if isSelf(uid) || isAdmin();
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // /reports/{reportId}
+    // --------------------------------------------------------------------------
+
+    match /reports/{reportId} {
+      // Map + community verification require authenticated read of reports.
+      allow read: if isSignedIn();
+
+      // Citizens (or any signed-in user with citizen profile) create pending reports
+      // about themselves only. Assignment / verification counters start empty.
+      allow create: if isSignedIn()
+        && userExists()
+        && request.resource.data.reportId == reportId
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && validFaultType(request.resource.data.faultType)
+        && validSeverity(request.resource.data.severity)
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.description is string
+        && request.resource.data.verificationCount == 0
+        && request.resource.data.disputeCount == 0
+        && (
+             !('assignedTechnicianUid' in request.resource.data)
+             || request.resource.data.assignedTechnicianUid == null
+           )
+        && (
+             !('afterImageUrl' in request.resource.data)
+             || request.resource.data.afterImageUrl == null
+           );
+
+      allow update: if isSignedIn() && (
+        citizenOwnsPendingReportUpdate()
+        || technicianAssignedJobUpdate()
+        || adminReportUpdate()
+      );
+
+      allow delete: if isAdmin();
+
+      // ---- Role-specific update predicates (report match scope) ----
+
+      function citizenOwnsPendingReportUpdate() {
+        return isCitizen()
+          && resource.data.reporterUid == request.auth.uid
+          && resource.data.status == 'pending'
+          && unchanged('reporterUid')
+          && unchanged('reporterName')
+          && unchanged('reportId')
+          && unchanged('createdAt')
+          && unchanged('assignedTechnicianUid')
+          && unchanged('assignedTechnicianName')
+          && unchanged('verificationCount')
+          && unchanged('disputeCount')
+          && unchanged('afterImageUrl')
+          && request.resource.data.status == 'pending'
+          && onlyChanging([
+            'faultType',
+            'description',
+            'severity',
+            'latitude',
+            'longitude',
+            'address',
+            'beforeImageUrl',
+            'assignedArea',
+            'isEmergency',
+            'updatedAt',
+            'status'
+          ]);
+      }
+
+      function technicianAssignedJobUpdate() {
+        return isAssignedTechnician(resource.data)
+          && unchanged('reporterUid')
+          && unchanged('reporterName')
+          && unchanged('reportId')
+          && unchanged('createdAt')
+          && unchanged('assignedTechnicianUid')
+          && unchanged('assignedTechnicianName')
+          && unchanged('verificationCount')
+          && unchanged('disputeCount')
+          && unchanged('beforeImageUrl')
+          && unchanged('latitude')
+          && unchanged('longitude')
+          && request.resource.data.status in ['assigned', 'ongoing', 'completed']
+          && onlyChanging([
+            'status',
+            'afterImageUrl',
+            'repairNotes',
+            'updatedAt'
+          ]);
+      }
+
+      function adminReportUpdate() {
+        return isAdmin()
+          && unchanged('reporterUid')
+          && unchanged('reportId')
+          && unchanged('createdAt')
+          && validFaultStatus(request.resource.data.status)
+          && validSeverity(request.resource.data.severity)
+          // Counters still not directly forged by admin clients in bulk;
+          // admins may set disputed/completed via workflow, but counts stay
+          // function-owned unless explicitly included by a later admin tool.
+          && unchanged('verificationCount')
+          && unchanged('disputeCount');
+      }
+
+      // ------------------------------------------------------------------------
+      // Activity timeline (append-mostly audit trail)
+      // ------------------------------------------------------------------------
+      match /activity/{activityId} {
+        allow read: if isSignedIn();
+
+        // Actors may append a timeline event for actions they are allowed to take.
+        allow create: if isSignedIn()
+          && request.resource.data.reportId == reportId
+          && validFaultStatus(request.resource.data.status)
+          && (
+            isAdmin()
+            || (
+              isAssignedTechnician(reportDoc(reportId).data)
+              && request.resource.data.actorRole == 'Technician'
+            )
+            || (
+              isCitizen()
+              && reportDoc(reportId).data.reporterUid == request.auth.uid
+              && request.resource.data.actorRole == 'Citizen'
+              && request.resource.data.status == 'pending'
+            )
+          );
+
+        allow update, delete: if false;
+      }
+
+      // ------------------------------------------------------------------------
+      // Community verification — one vote document per citizen uid
+      // Counters / status flips must be applied by Cloud Functions (Admin SDK).
+      // ------------------------------------------------------------------------
+      match /verifications/{voterUid} {
+        allow read: if isSignedIn();
+
+        allow create: if isCitizen()
+          && voterUid == request.auth.uid
+          && reportExists(reportId)
+          && reportDoc(reportId).data.status == 'completed'
+          && request.resource.data.keys().hasOnly([
+            'voterUid',
+            'reportId',
+            'createdAt',
+            'note'
+          ])
+          && request.resource.data.voterUid == request.auth.uid
+          && request.resource.data.reportId == reportId;
+
+        allow update, delete: if false;
+      }
+
+      // ------------------------------------------------------------------------
+      // Community disputes — one dispute document per citizen uid
+      // Auto-reopen to disputed must be performed by Cloud Functions.
+      // ------------------------------------------------------------------------
+      match /disputes/{voterUid} {
+        allow read: if isSignedIn();
+
+        allow create: if isCitizen()
+          && voterUid == request.auth.uid
+          && reportExists(reportId)
+          && reportDoc(reportId).data.status == 'completed'
+          && request.resource.data.keys().hasOnly([
+            'voterUid',
+            'reportId',
+            'reason',
+            'createdAt'
+          ])
+          && request.resource.data.voterUid == request.auth.uid
+          && request.resource.data.reportId == reportId
+          && request.resource.data.reason is string;
+
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // Deny anything not explicitly matched.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

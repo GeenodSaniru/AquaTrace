@@ -204,55 +204,68 @@ All team members must conform to these shared document collections:
 
 ## 6. Environment-Safe Firebase Setup & Quick Run
 
-AquaTrace includes an **environment-safe initialization architecture**. The app runs out-of-the-box in demo mode with full visual features and reactive data even before you attach a production Firebase project.
+AquaTrace includes an **environment-safe initialization architecture** via `FirebaseService`. With valid `DefaultFirebaseOptions`, the app initializes the configured project (`aquatrace-92e2e`). If options were missing, it would fall back to demo mode.
 
-### 6.1 Running in Demo Mode (Zero Setup Required)
-To run immediately on your machine:
+### 6.1 Running locally
 ```bash
-# 1. Fetch dependencies
 flutter pub get
-
-# 2. Run static analysis & tests
 flutter analyze
 flutter test
-
-# 3. Launch on desktop or web
 flutter run -d macos
 # OR
 flutter run -d chrome
 ```
 
-On the Sign In screen, tap any demo role button under **"demo role access"**:
-- **Demo Citizen** (`citizen@demo.com`): Access citizen reporting, my reports, map, and repair confirmation.
-- **Demo Technician** (`tech@demo.com`): Access job queue, status updates, and navigation.
-- **Demo Admin** (`admin@demo.com`): Access admin dashboard, review queue, and technician assignment.
+On the Sign In screen, **"demo role access"** loads in-memory mock users (development only — not Firebase Auth accounts):
+- **Demo Citizen** (`citizen@demo.com`)
+- **Demo Technician** (`tech@demo.com`)
+- **Demo Admin** (`admin@demo.com`)
 
-### 6.2 Connecting Real Firebase Project (Production Setup)
-When ready to connect your team's live Firebase backend:
-1. Install the FlutterFire CLI:
-   ```bash
-   dart pub global activate flutterfire_cli
-   ```
-2. Log into Firebase:
-   ```bash
-   firebase login
-   ```
-3. Configure the Flutter application:
-   ```bash
-   flutterfire configure --project=YOUR_FIREBASE_PROJECT_ID
-   ```
-4. Update `lib/core/config/firebase_options.dart` with the generated configuration.
-5. In Firebase Console:
-   - Enable **Authentication** (Email/Password).
-   - Create **Cloud Firestore** database in test/production rules mode.
-   - Enable **Firebase Storage** for photo uploads.
-   - Enable **Firebase Cloud Messaging (FCM)** for push alerts.
+Public **Create Account** always registers a **citizen**. Technician/Admin identities must be provisioned with the Admin SDK (or an approved Cloud Function), never via the client role picker.
 
-> **Security Reminder**: Never commit real credentials, service-account JSON keys, or `.p8` certificate files to Git.
+### 6.2 Firebase project (current)
+| Item | Value |
+|---|---|
+| Project | `aquatrace-92e2e` (display name AquaTrace) |
+| Dart options | `lib/core/config/firebase_options.dart` |
+| Proposed rules | `firestore.rules` (see §8 — **not deployed until approved**) |
+
+Console checklist:
+- Enable **Authentication → Email/Password**.
+- Create **Cloud Firestore** and deploy locked-down rules from `firestore.rules` when authorized.
+- Enable **Storage** / **FCM** when Members 3/8 need them.
+- Seed the first admin/technician user documents with Admin SDK (`role` field).
+
+### 6.3 Google / Apple sign-in (not wired)
+UI buttons remain visible per the design PDF but are **gracefully disabled** until:
+1. **Google:** Firebase Auth Google provider + OAuth client IDs + `google_sign_in` package.
+2. **Apple:** Apple Developer “Sign in with Apple”, Firebase Apple provider + `sign_in_with_apple`.
+
+> **Security Reminder**: Never commit service-account JSON keys, `.p8` certificates, or `.env` secrets.
 
 ---
 
-## 7. Team Branch & Pull Request Workflow
+## 7. Role security model (Member 1)
+
+Hiding a nav item is **not** security. Authorization is:
+
+1. **Firebase Auth** proves identity (`request.auth.uid`).
+2. **`/users/{uid}.role`** stores `citizen` \| `technician` \| `admin`.
+3. **Client registration** hard-codes `role: citizen` (`AuthService.registerWithEmailAndPassword`).
+4. **Profile updates** patch only safe fields (`displayName`, `phoneNumber`, `assignedArea`, `photoUrl`) — never `role` / `email` / `uid` / `employeeId`.
+5. **`firestore.rules`** rejects self-elevation and unauthorized report mutations (proposed file in repo).
+6. **UI `RoleGate`** only routes shells; privileged role assignment is an Admin SDK / Cloud Functions operation.
+
+Deploy rules later (do not run until authorized):
+```bash
+firebase deploy --only firestore:rules --project aquatrace-92e2e
+```
+
+Integration notes for Members 2–8: see [`docs/MEMBER1_HANDOFF.md`](docs/MEMBER1_HANDOFF.md).
+
+---
+
+## 8. Team Branch & Pull Request Workflow
 
 1. **Pull the latest `main` branch before starting**:
    ```bash

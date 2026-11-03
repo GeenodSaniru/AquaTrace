@@ -299,8 +299,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Google Sign-In requires active OAuth credentials in Firebase Console.',
+                            'Google Sign-In is not enabled yet. Enable the Google provider in Firebase Authentication, add OAuth client IDs, then add the google_sign_in package.',
                           ),
+                          duration: Duration(seconds: 5),
                         ),
                       );
                     },
@@ -321,8 +322,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Apple Sign-In requires Apple Developer provisioning configuration.',
+                            'Apple Sign-In is not enabled yet. Requires Apple Developer Team, Sign in with Apple capability, Firebase Apple provider, and sign_in_with_apple.',
                           ),
+                          duration: Duration(seconds: 5),
                         ),
                       );
                     },
