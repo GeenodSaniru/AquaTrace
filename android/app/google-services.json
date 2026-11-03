@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "298509402653",
+    "project_id": "aquatrace-92e2e",
+    "storage_bucket": "aquatrace-92e2e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:298509402653:android:db2fc54fac90b6b5b47cf4",
+        "android_client_info": {
+          "package_name": "com.aquatrace.aquatrace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2FXaUZYxRz7F6ciMXmggQGC7QHph6PMQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
