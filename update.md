@@ -1,5 +1,26 @@
 # AquaTrace — Update Log
 
+## 2026-11-03 18:29:44 +0530 (UTC+0530) — Member 1 remaining cloud hardening complete
+
+### Completed
+- Deployed `firestore.rules` to `aquatrace-92e2e` (compiled clean; unused `isStaff` removed).
+- Enabled Authentication **Email/Password**.
+- Applied Google Cloud API key **application restrictions**:
+  - Android: `com.aquatrace.aquatrace` + debug SHA-1
+  - iOS: bundle `com.aquatrace.aquatrace`
+  - Browser: localhost + Firebase Hosting referrers
+- Seeded staff Auth users + `/users/{uid}` docs: `admin@aquatrace.lk` (admin), `tech@aquatrace.lk` (technician).
+- Added `scripts/member1_cloud_hardening.py`; gitignored `scripts/.seed_credentials.local.json`.
+- Verified: `flutter analyze` clean; `flutter test` **10/10**.
+
+### Not done (out of automated scope / intentional)
+- GitHub Secret Scanning alerts **not** auto-dismissed (expected client keys — dismiss manually as false positive if desired).
+- API keys **not rotated** (not required; restrictions applied instead).
+- Release Android SHA-1 not added yet (debug only).
+- Google/Apple OAuth still stubbed.
+
+---
+
 ## 2026-11-03 18:12:33 +0530 (UTC+0530) — Member 1 prompts 1A–1C complete
 
 ### Completed tasks (Member 1)

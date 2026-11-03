@@ -230,11 +230,13 @@ Public **Create Account** always registers a **citizen**. Technician/Admin ident
 | Dart options | `lib/core/config/firebase_options.dart` |
 | Proposed rules | `firestore.rules` (see §8 — **not deployed until approved**) |
 
-Console checklist:
-- Enable **Authentication → Email/Password**.
-- Create **Cloud Firestore** and deploy locked-down rules from `firestore.rules` when authorized.
+Console / cloud hardening status (Member 1):
+- **Authentication → Email/Password**: enabled for `aquatrace-92e2e`.
+- **Cloud Firestore**: `(default)` database exists; `firestore.rules` **deployed**.
+- **API keys**: Android / iOS / Browser auto-keys restricted (package/bundle/referrers). Android restriction currently includes the **debug** keystore SHA-1 — add your release SHA-1 before Play builds.
+- **Bootstrap staff**: `admin@aquatrace.lk` (admin) and `tech@aquatrace.lk` (technician) seeded; passwords live only in gitignored `scripts/.seed_credentials.local.json` (change on first login).
 - Enable **Storage** / **FCM** when Members 3/8 need them.
-- Seed the first admin/technician user documents with Admin SDK (`role` field).
+- Re-run hardening after SHA changes: `python3 scripts/member1_cloud_hardening.py <ANDROID_SHA1>`.
 
 ### 6.3 Google / Apple sign-in (not wired)
 UI buttons remain visible per the design PDF but are **gracefully disabled** until:
