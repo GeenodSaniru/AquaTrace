@@ -39,12 +39,14 @@ Shared tabs already host map / reports / notifications / profile stubs — exten
 | **7 Verify/Dispute** | Planned subcollections in `firestore.rules` | Counters via Cloud Functions, not client increments |
 | **8 Notifications** | `NotificationItem`, path `/users/{uid}/notifications` | Prefer server-written creates; client marks `isRead` only |
 
-## Security requirements (blocking for production)
+## Security requirements (status)
 
 1. Public sign-up → **citizen only** (implemented in client).
-2. Seed staff with **Admin SDK** before relying on technician/admin flows against real Firebase.
-3. Deploy `firestore.rules` only after team review (`firebase deploy --only firestore:rules`).
-4. Demo role buttons are **local mock auth**, not production identities.
+2. Staff seeded: `admin@aquatrace.lk` / `tech@aquatrace.lk` (passwords in local gitignored seed file — rotate on first use).
+3. `firestore.rules` **deployed** to `aquatrace-92e2e`.
+4. Firebase client API keys restricted (add release SHA-1 for Play builds).
+5. Demo role buttons are **local mock auth**, not production identities.
+6. GitHub “Google API key” alerts are expected client config — dismiss manually if the team agrees; do not delete `firebase_options.dart` / native config files.
 
 ## QA baseline Member 1 expects others to keep green
 

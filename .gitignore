@@ -49,6 +49,9 @@ app.*.map.json
 .env
 .env.*
 
+# Local-only bootstrap credentials from Member 1 cloud hardening
+scripts/.seed_credentials.local.json
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
