@@ -8,6 +8,7 @@ import '../../features/citizen/presentation/citizen_main_shell.dart';
 import '../../features/map/presentation/shared_map_view.dart';
 import '../../features/notifications/presentation/shared_notifications_view.dart';
 import '../../features/profile/presentation/shared_profile_view.dart';
+import '../../features/reports/presentation/citizen_report_form_screen.dart';
 import '../../features/reports/presentation/shared_reports_view.dart';
 import '../../features/technician/presentation/technician_main_shell.dart';
 
@@ -28,6 +29,7 @@ class AppRouter {
   static const String reportsList = '/reports';
   static const String notifications = '/notifications';
   static const String profile = '/profile';
+  static const String reportFault = '/reports/new';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -79,6 +81,11 @@ class AppRouter {
       case profile:
         return MaterialPageRoute(
           builder: (_) => const Scaffold(body: SharedProfileView()),
+          settings: settings,
+        );
+      case reportFault:
+        return MaterialPageRoute<bool>(
+          builder: (_) => const CitizenReportFormScreen(),
           settings: settings,
         );
       default:
