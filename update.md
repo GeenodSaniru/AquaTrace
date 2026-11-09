@@ -1,5 +1,32 @@
 # AquaTrace — Update Log
 
+## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
+
+### Completed
+- Replaced the citizen home reporting placeholder with a routed fault-report form for fault type, description, severity, street/landmark, GPS coordinates, and evidence photo.
+- Added camera/gallery selection, image type/size checks, location permission/GPS error states, coordinate review/confirmation, required-field validation, and protection against duplicate taps or leaving during submission.
+- Added Firebase Storage evidence upload and idempotent Firestore report creation using the agreed `ReportModel` fields, authenticated reporter UID, UUID-based report ID, numeric coordinates, UTC creation time, `pending` initial status, and evidence download URL.
+- Added report snapshot synchronization to the shared repository and owner-restricted `storage.rules` configuration.
+- Added focused success, validation, permission, picker cancellation, upload failure, Firestore failure, and duplicate-submission tests.
+- Files changed: `firebase.json`, `lib/core/navigation/app_router.dart`, `lib/core/services/data_repository.dart`, `lib/core/services/report_submission_gateway.dart`, `lib/features/citizen/presentation/citizen_home_view.dart`, `lib/features/reports/presentation/citizen_report_form_screen.dart`, `lib/features/reports/services/citizen_report_input_provider.dart`, `macos/Flutter/GeneratedPluginRegistrant.swift`, `pubspec.yaml`, `pubspec.lock`, `storage.rules`, `test/report_submission_test.dart`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — formatted reporting changes. |
+| `flutter analyze` | No Dart issues; existing warning: configured asset directory `assets/icons/` is missing. |
+| `flutter test test/report_submission_test.dart` | Pass — 12/12. |
+| `flutter test` | Pass — 22/22. |
+| `flutter build web` | Pass — `build/web` generated; existing missing `assets/icons/` warning and non-blocking wasm dry-run notice. |
+| Browser smoke (`http://localhost:5173/#/reports/new`) | Pass — form rendered at desktop/mobile sizes; empty submit showed required-field errors. |
+
+### Outstanding / blockers
+- Live Storage upload and Firestore persistence were not verified: Firebase Storage is not enabled/configured for the project in this environment, and no authenticated Firebase citizen account was available. Demo-role identities are intentionally rejected by the submission gateway. Deploy/enable the owner-scoped Storage rules only after the project Storage bucket is enabled and authorized.
+- Camera and physical GPS permission behavior is covered through injected platform-provider tests; no mobile device/emulator was available for a physical permission prompt test.
+- Existing `assets/icons/` folder is missing although declared in `pubspec.yaml`; analysis/build report this warning.
+- Citizen-home shared report-card background/overflow console warnings observed during smoke test are outside this module's changes.
+- Exact checks: `dart format lib test`; `flutter analyze`; `flutter test test/report_submission_test.dart`; `flutter test`; `flutter build web`.
+
 ## 2026-11-03 18:29:44 +0530 (UTC+0530) — Member 1 remaining cloud hardening complete
 
 ### Completed
