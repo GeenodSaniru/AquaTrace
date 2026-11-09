@@ -1,26 +1,41 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../constants/fault_constants.dart';
+import '../errors/app_exception.dart';
 import '../models/activity_timeline_event.dart';
 import '../models/mock_data.dart';
 import '../models/notification_item.dart';
 import '../models/report_model.dart';
 import 'firebase_service.dart';
+import 'report_submission_gateway.dart';
 
 /// Central repository managing reports, activity timelines, and notifications.
 ///
 /// Supports real Cloud Firestore synchronization when credentials are active,
 /// and reactive in-memory state during development or demo execution.
 class DataRepository with ChangeNotifier {
+  final ReportSubmissionGateway _reportSubmissionGateway;
   final List<ReportModel> _reports = [];
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
+  final Set<String> _submissionsInFlight = {};
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
 
-  DataRepository() {
+  DataRepository({ReportSubmissionGateway? reportSubmissionGateway})
+    : _reportSubmissionGateway =
+          reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
     _initialize();
+    if (FirebaseService.isRealFirebase) {
+      _listenForReports();
+    }
   }
 
   void _initialize() {
@@ -55,22 +70,137 @@ class DataRepository with ChangeNotifier {
     }
   }
 
-  Future<void> addReport(ReportModel report) async {
-    _reports.insert(0, report);
-    _addTimelineEvent(
-      reportId: report.reportId,
-      title: 'Report Submitted',
-      description:
-          'Report submitted by ${report.reporterName} for ${report.faultType.displayName}.',
-      actorName: report.reporterName,
-      actorRole: 'Citizen',
-      status: FaultStatus.pending,
-    );
-    notifyListeners();
-
-    if (FirebaseService.isRealFirebase) {
-      // Future Firebase Firestore integration by Member 3
+  Future<void> addReport(
+    ReportModel report, {
+    required Uint8List evidenceBytes,
+    required String contentType,
+  }) async {
+    if (report.reportId.trim().isEmpty || report.reporterUid.trim().isEmpty) {
+      throw const ValidationException('Report identity is required.');
     }
+    if (report.status != FaultStatus.pending) {
+      throw const ValidationException(
+        'New reports must start with Pending status.',
+      );
+    }
+    if (!report.latitude.isFinite ||
+        !report.longitude.isFinite ||
+        report.latitude < -90 ||
+        report.latitude > 90 ||
+        report.longitude < -180 ||
+        report.longitude > 180) {
+      throw const ValidationException(
+        'A valid GPS location is required to submit a report.',
+      );
+    }
+    if (report.reporterName.trim().isEmpty ||
+        report.description.trim().length < 10 ||
+        report.description.trim().length > 1000 ||
+        report.address.trim().length < 3 ||
+        report.address.trim().length > 120) {
+      throw const ValidationException(
+        'Check the reporter name, description, and location details.',
+      );
+    }
+    if (evidenceBytes.isEmpty || evidenceBytes.length > 10 * 1024 * 1024) {
+      throw const ValidationException(
+        'Choose an evidence photo smaller than 10 MB.',
+      );
+    }
+    if (!const {
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+    }.contains(contentType)) {
+      throw const ValidationException(
+        'Choose a JPEG, PNG, WebP, or HEIC evidence photo.',
+      );
+    }
+    if (_submissionsInFlight.contains(report.reportId) ||
+        _reports.any((saved) => saved.reportId == report.reportId)) {
+      throw const ValidationException(
+        'This report has already been submitted.',
+      );
+    }
+
+    _submissionsInFlight.add(report.reportId);
+    try {
+      final imageUrl = await _reportSubmissionGateway.uploadEvidence(
+        report: report,
+        bytes: evidenceBytes,
+        contentType: contentType,
+      );
+      if (imageUrl.trim().isEmpty) {
+        throw const DatabaseException(
+          'The evidence photo upload did not return a file URL.',
+        );
+      }
+
+      final savedReport = report.copyWith(beforeImageUrl: imageUrl);
+      await _reportSubmissionGateway.createReport(savedReport);
+
+      _reports.insert(0, savedReport);
+      _addTimelineEvent(
+        reportId: savedReport.reportId,
+        title: 'Report Submitted',
+        description:
+            'Report submitted by ${savedReport.reporterName} for ${savedReport.faultType.displayName}.',
+        actorName: savedReport.reporterName,
+        actorRole: 'Citizen',
+        status: FaultStatus.pending,
+      );
+      notifyListeners();
+    } finally {
+      _submissionsInFlight.remove(report.reportId);
+    }
+  }
+
+  void _listenForReports() {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _reportsSubscription?.cancel();
+      if (user == null) {
+        _reports
+          ..clear()
+          ..addAll(MockData.initialReports);
+        notifyListeners();
+        return;
+      }
+
+      _reportsSubscription = FirebaseFirestore.instance
+          .collection('reports')
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final reports =
+                  snapshot.docs
+                      .map(
+                        (document) => ReportModel.fromMap(
+                          document.data(),
+                          documentId: document.id,
+                        ),
+                      )
+                      .toList()
+                    ..sort((first, second) {
+                      return second.createdAt.compareTo(first.createdAt);
+                    });
+              _reports
+                ..clear()
+                ..addAll(reports);
+              notifyListeners();
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              debugPrint('[AquaTrace] Report sync failed: $error');
+            },
+          );
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _reportsSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> updateReportStatus({
