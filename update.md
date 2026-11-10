@@ -1,5 +1,51 @@
 # AquaTrace — Update Log
 
+## 2026-11-10 21:21:00 +0530 (UTC+0530) — Member 2 final regression and handoff
+
+### Completed
+- Re-read repository Markdown guidance, the latest update history, current profile/auth/theme/storage contracts, and inspected the profile/settings cluster in `docs/AquaTrace UI.pdf`.
+- Fixed profile header fallbacks for whitespace-only names and service areas; mapped Firebase Storage `unauthorized` and retry-limit/network failures to clear user guidance.
+- Added final regression coverage for malformed account fields, invalid profile name/phone, photo-library permission denial, upload denial/network failure, unsupported/empty/oversized images, user-scoped preferences, appearance persistence, save/cancel flows, and role-specific account details.
+- Reviewed privacy exposure: profile uses only the authenticated `AuthProvider.currentUser`; Firestore edits continue through the existing safe `AuthProvider.updateProfile` contract; sign-out remains delegated to `AuthProvider.signOut`.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format lib test` | Pass — 55 files, no formatting changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — 36/36 |
+| `flutter build web --release` | Pass — release bundle generated |
+| `flutter run -d web-server --release --web-port 5177` | Pass — release app served; demo citizen profile, appearance control, Edit Profile, Help & Support, and About rendered |
+| `git diff --check` | Pass |
+
+### Remaining work / cross-module dependencies
+- Profile avatar rules are present in `storage.rules` and deployed configuration, but live bucket upload and Storage-rule emulator validation remain unverified; the local shell has no `firebase` or `java` executable. Enable Storage and deploy the reviewed rules before relying on cloud uploads.
+- Notification delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export depend on other services/modules and remain explicitly marked as local-only or unavailable in the UI.
+- Windows desktop build remains unavailable because Windows desktop support is not configured in this checkout; release web build/launch passed.
+
+## 2026-11-10 12:40:24 +0530 (UTC+0530) — Member 2 profile integration QA
+
+### Completed
+- Fast-forwarded `sasundi` to the integrated remote state `3a597e0`, including Member 3's reporting module and Firebase Storage rules configuration.
+- Rechecked the AquaTrace UI PDF and current profile/settings implementation against its profile, edit-profile, notification, location, privacy, accessibility, help/support, and about screens.
+- Added an owner-only Storage rule for `users/{uid}/profile/avatar`, matching the existing profile upload path; reads require sign-in, writes require matching Auth UID, image MIME type, and a 5 MB limit. Existing report-evidence rules are unchanged.
+- Aligned profile-photo validation with the Storage MIME allowlist and added tests for unsupported, empty, and oversized photos, blank profile fields, and persisted appearance.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format lib test` | Pass — 55 files; no formatting changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test test/widget_test.dart` | Pass — 21/21 |
+| `flutter test` | Pass — 33/33, including report-submission tests |
+| `flutter run -d web-server --release --web-port 5176` | Pass — built and served `build/web`; citizen Profile and Accessibility screens rendered |
+| Firebase Storage emulator/rules validation | Not run — `firebase` and `java` executables are unavailable in this shell |
+
+### Remaining work / blockers
+- `storage.rules` now contains the profile-avatar rule and `firebase.json` includes Storage rules, but rules have not been deployed and the live Storage bucket/upload path was not exercised. Enable/configure Firebase Storage and deploy the reviewed rules before relying on cloud uploads.
+- Notification delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export remain local-only or unavailable, as noted in the UI.
+- Windows desktop build remains unavailable because the Windows desktop project is not configured; web release launch is verified.
+
 ## 2026-11-09 13:19:39 +0530 (UTC+0530) — Member 2 profile and settings
 
 ### Completed
@@ -36,7 +82,7 @@
 
 ### Git
 - 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
-- `git push origin sasundi` was attempted and rejected: GitHub reported invalid username/token; no push completed.
+- The initial push attempt was rejected, then completed after Git Credential Manager browser authentication. `git ls-remote origin refs/heads/sasundi` verified the branch at `5f155f1fd6ecbe85af2f98533a3c910ac992f594` on 2026-11-09.
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed
