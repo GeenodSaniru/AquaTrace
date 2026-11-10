@@ -299,6 +299,96 @@ void main() {
   });
 
   group('Profile and settings', () {
+    test('Profile photo validation matches the Storage rules', () async {
+      final service = ProfilePhotoService();
+
+      await expectLater(
+        service.upload(
+          uid: 'citizen-a',
+          image: XFile.fromData(
+            Uint8List.fromList([1, 2, 3]),
+            name: 'avatar.gif',
+            mimeType: 'image/gif',
+          ),
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        service.upload(
+          uid: 'citizen-a',
+          image: XFile.fromData(
+            Uint8List(0),
+            name: 'empty.png',
+            mimeType: 'image/png',
+          ),
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        service.upload(
+          uid: 'citizen-a',
+          image: XFile.fromData(
+            Uint8List(ProfilePhotoService.maxPhotoBytes + 1),
+            name: 'large.png',
+            mimeType: 'image/png',
+          ),
+        ),
+        throwsStateError,
+      );
+    });
+
+    testWidgets('Edit profile validates required name and phone', (
+      WidgetTester tester,
+    ) async {
+      final sharedPreferences = await SharedPreferences.getInstance();
+      final preferences = PreferencesService(sharedPreferences);
+      final authService = AuthService(preferences);
+      final authProvider = AuthProvider(authService);
+      await tester.runAsync(
+        () => authProvider.signInWithDemoRole(UserRole.citizen),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: authProvider),
+            Provider<AuthService>.value(value: authService),
+          ],
+          child: const MaterialApp(home: EditProfileScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).at(0), ' ');
+      await tester.enterText(find.byType(TextFormField).at(2), '123');
+      await tester.ensureVisible(find.text('Save Profile'));
+      await tester.tap(find.text('Save Profile'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Enter your full name.'), findsOneWidget);
+      expect(find.text('Enter a valid phone number.'), findsOneWidget);
+      expect(authProvider.currentUser?.displayName, 'Amal Perera');
+    });
+
+    testWidgets('Appearance preference survives provider recreation', (
+      WidgetTester tester,
+    ) async {
+      final preferences = await SharedPreferences.getInstance();
+      final firstProvider = ThemeProvider();
+      await firstProvider.setThemeMode(ThemeMode.dark);
+
+      final restoredProvider = ThemeProvider();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ThemeProvider>.value(
+          value: restoredProvider,
+          child: const MaterialApp(home: Text('AquaTrace')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(preferences.getString('aquatrace_theme_mode'), 'dark');
+      expect(restoredProvider.themeMode, ThemeMode.dark);
+    });
+
     testWidgets('Profile navigation opens each reference settings screen', (
       WidgetTester tester,
     ) async {

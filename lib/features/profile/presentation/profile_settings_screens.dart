@@ -63,6 +63,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _showMessage('Choose an image smaller than 5 MB.');
         return;
       }
+      if (!ProfilePhotoService.supportsContentType(
+        (image.mimeType ?? 'image/jpeg').toLowerCase(),
+      )) {
+        _showMessage('Choose a JPEG, PNG, WebP, or HEIC image.');
+        return;
+      }
 
       setState(() {
         _selectedImage = image;
