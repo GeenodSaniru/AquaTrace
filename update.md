@@ -1,5 +1,42 @@
 # AquaTrace — Update Log
 
+## 2026-11-09 13:19:39 +0530 (UTC+0530) — Member 2 profile and settings
+
+### Completed
+- Replaced the profile placeholder with authenticated-user account details, role-specific employee ID, profile editing, photo selection/upload flow, appearance preference, and navigation to notification, location, privacy, accessibility, help, and about screens.
+- Added UID-scoped local preference persistence for notification categories, location area/access choice, privacy choices, text size, and contrast. Text scaling and high-contrast styling are applied app-wide; appearance remains persisted by `ThemeProvider`.
+- Added Firebase Storage upload to `users/{uid}/profile/avatar`, image type/size checks, and user-facing picker/upload failure handling. Profile edits still use the existing safe `AuthProvider` update contract.
+- Added widget coverage for preference isolation, role-specific profile fields, all settings navigation, save/cancel, persistence, accessibility settings, and simulated upload-denial behavior.
+- Aligned the Dart SDK minimum with the documented Dart 3.13+ support/current 3.13.0 SDK, added the Firebase Storage dependency/plugin registration, and removed the unused `assets/icons/` directory declaration that prevented Flutter asset bundling.
+
+### Files / modules changed
+- `lib/features/profile/presentation/shared_profile_view.dart`
+- `lib/features/profile/presentation/profile_settings_screens.dart`
+- `lib/features/profile/profile_photo_service.dart`
+- `lib/core/services/preferences_service.dart`
+- `lib/main.dart` (app-wide text scale and contrast application)
+- `test/widget_test.dart`
+- `pubspec.yaml`, `pubspec.lock`, `macos/Flutter/GeneratedPluginRegistrant.swift`
+
+### Checks and outcomes
+| Command | Result |
+|---------|--------|
+| `flutter pub get` | Pass |
+| `dart format lib test` | Pass — 51 files formatted, no changes needed |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test test/widget_test.dart` | Pass — 18/18 |
+| `flutter run -d web-server --release --web-port 5175` | Pass — web release compiled and served; Profile and Notification Settings rendered in browser |
+| `flutter build windows --debug` | Not available — Windows desktop project is not configured in this checkout |
+| `git diff --check` | Pass; generated macOS Swift file reports only a line-ending normalization warning |
+
+### Remaining work / blockers
+- Firebase Storage is not enabled/configured with storage rules in this repository. Real cloud photo upload is not verified; enable Storage and coordinate a self-only rule for `users/{uid}/profile/avatar` before production use. Upload denial is surfaced in the UI.
+- Push delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export are not connected in this build. Their settings are persisted locally and explicitly identified as not connected.
+- Windows desktop launch/build remains unavailable until desktop support is added to the project. Web release startup is verified.
+
+### Git
+- 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
+- `git push origin sasundi` was attempted and rejected: GitHub reported invalid username/token; no push completed.
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed
