@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/fault_constants.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_header_bar.dart';
@@ -86,9 +87,7 @@ class CitizenHomeView extends StatelessWidget {
             AppButton(
               label: '+ Report Water Fault',
               height: 52,
-              onPressed: () {
-                _showReportFaultBottomSheet(context);
-              },
+              onPressed: () async => _openReportForm(context),
             ),
             const SizedBox(height: 12),
 
@@ -223,60 +222,14 @@ class CitizenHomeView extends StatelessWidget {
     );
   }
 
-  void _showReportFaultBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Report Water Fault',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Detailed fault submission with GPS, photo evidence, and severity rating is assigned to Member 3. Member 1 foundation provides this integrated modal interface.',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.lightTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            AppButton(
-              label: 'Proceed to Report Form',
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Member 3 fault reporting module ready for implementation.',
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
+  Future<void> _openReportForm(BuildContext context) async {
+    final submitted = await Navigator.of(context)
+        .pushNamed<bool>(AppRouter.reportFault);
+    if (!context.mounted || submitted != true) return;
+
+    onNavigateTab?.call(2);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Your fault report was submitted.')),
     );
   }
 }
