@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:aquatrace/core/config/firebase_options.dart';
 import 'package:aquatrace/core/constants/app_roles.dart';
 import 'package:aquatrace/core/constants/fault_constants.dart';
@@ -17,6 +15,7 @@ import 'package:aquatrace/features/profile/presentation/profile_settings_screens
 import 'package:aquatrace/features/profile/presentation/shared_profile_view.dart';
 import 'package:aquatrace/features/profile/profile_photo_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -299,6 +298,44 @@ void main() {
   });
 
   group('Profile and settings', () {
+    testWidgets('Profile shows safe fallbacks for malformed account fields', (
+      WidgetTester tester,
+    ) async {
+      final sharedPreferences = await SharedPreferences.getInstance();
+      final preferences = PreferencesService(sharedPreferences);
+      final authService = AuthService(preferences);
+      final authProvider = _FixedAuthProvider(
+        authService,
+        UserModel(
+          uid: 'citizen-empty',
+          email: '',
+          displayName: '   ',
+          phoneNumber: '',
+          role: UserRole.citizen,
+          assignedArea: '  ',
+          createdAt: DateTime.utc(2026),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<PreferencesService>.value(
+              value: preferences,
+            ),
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ],
+          child: const MaterialApp(home: SharedProfileView()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('AquaTrace User'), findsOneWidget);
+      expect(find.text('Employee ID'), findsNothing);
+      expect(find.text('—'), findsNWidgets(4));
+    });
+
     test('Profile photo validation matches the Storage rules', () async {
       final service = ProfilePhotoService();
 
@@ -629,7 +666,7 @@ void main() {
           ],
           child: MaterialApp(
             home: EditProfileScreen(
-              photoService: _FailingProfilePhotoService(),
+              photoService: _FailingProfilePhotoService('permission-denied'),
               imagePicker: _FixedImagePicker(image),
             ),
           ),
@@ -656,6 +693,88 @@ void main() {
       );
       expect(authProvider.currentUser?.displayName, 'Amal Perera');
     });
+
+    testWidgets('Profile photo picker permission denial is explained', (
+      WidgetTester tester,
+    ) async {
+      final sharedPreferences = await SharedPreferences.getInstance();
+      final preferences = PreferencesService(sharedPreferences);
+      final authService = AuthService(preferences);
+      final authProvider = AuthProvider(authService);
+      await tester.runAsync(
+        () => authProvider.signInWithDemoRole(UserRole.citizen),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: authProvider),
+            Provider<AuthService>.value(value: authService),
+          ],
+          child: MaterialApp(
+            home: EditProfileScreen(imagePicker: _DeniedImagePicker()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change Profile Picture'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Allow photo access in your device settings to choose a picture.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Profile photo network failures show retry guidance', (
+      WidgetTester tester,
+    ) async {
+      final sharedPreferences = await SharedPreferences.getInstance();
+      final preferences = PreferencesService(sharedPreferences);
+      final authService = AuthService(preferences);
+      final authProvider = AuthProvider(authService);
+      await tester.runAsync(
+        () => authProvider.signInWithDemoRole(UserRole.citizen),
+      );
+      final image = XFile.fromData(
+        Uint8List.fromList(List<int>.filled(16, 1)),
+        name: 'avatar.png',
+        mimeType: 'image/png',
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: authProvider),
+            Provider<AuthService>.value(value: authService),
+          ],
+          child: MaterialApp(
+            home: EditProfileScreen(
+              photoService: _FailingProfilePhotoService(
+                'firebase_storage/retry-limit-exceeded',
+              ),
+              imagePicker: _FixedImagePicker(image),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change Profile Picture'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Save Profile'));
+      await tester.tap(find.text('Save Profile'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Could not connect. Check your connection and try again.'),
+        findsOneWidget,
+      );
+      expect(authProvider.currentUser?.displayName, 'Amal Perera');
+    });
   });
 }
 
@@ -676,8 +795,43 @@ class _FixedImagePicker extends ImagePicker {
 }
 
 class _FailingProfilePhotoService extends ProfilePhotoService {
+  final String errorCode;
+
+  _FailingProfilePhotoService(this.errorCode);
+
   @override
   Future<String> upload({required String uid, required XFile image}) async {
-    throw StateError('permission-denied');
+    throw StateError(errorCode);
   }
+}
+
+class _DeniedImagePicker extends ImagePicker {
+  @override
+  Future<XFile?> pickImage({
+    required ImageSource source,
+    double? maxWidth,
+    double? maxHeight,
+    int? imageQuality,
+    CameraDevice preferredCameraDevice = CameraDevice.rear,
+    bool requestFullMetadata = true,
+  }) async {
+    throw PlatformException(code: 'photo_access_denied');
+  }
+}
+
+class _FixedAuthProvider extends AuthProvider {
+  final UserModel user;
+
+  // The superclass exposes only a positional constructor parameter.
+  // ignore: use_super_parameters
+  _FixedAuthProvider(AuthService authService, this.user) : super(authService);
+
+  @override
+  UserModel? get currentUser => user;
+
+  @override
+  UserRole get currentRole => user.role;
+
+  @override
+  bool get isAuthenticated => true;
 }
