@@ -248,6 +248,7 @@ service cloud.firestore {
           && unchanged('createdAt')
           && unchanged('assignedTechnicianUid')
           && unchanged('assignedTechnicianName')
+          && unchanged('assignedAt')
           && unchanged('verificationCount')
           && unchanged('disputeCount')
           && unchanged('afterImageUrl')
@@ -296,11 +297,27 @@ service cloud.firestore {
           && unchanged('createdAt')
           && validFaultStatus(request.resource.data.status)
           && validSeverity(request.resource.data.severity)
+          && (
+            request.resource.data.status == resource.data.status
+            || (
+              resource.data.status in ['pending', 'disputed']
+              && request.resource.data.status == 'assigned'
+            )
+          )
           // Counters still not directly forged by admin clients in bulk;
           // admins may set disputed/completed via workflow, but counts stay
           // function-owned unless explicitly included by a later admin tool.
           && unchanged('verificationCount')
-          && unchanged('disputeCount');
+          && unchanged('disputeCount')
+          && onlyChanging([
+            'status',
+            'severity',
+            'assignedTechnicianUid',
+            'assignedTechnicianName',
+            'assignedAt',
+            'updatedAt',
+            'repairNotes'
+          ]);
       }
 
       // ------------------------------------------------------------------------

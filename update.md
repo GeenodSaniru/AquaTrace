@@ -1,5 +1,15 @@
 # AquaTrace — Update Log
 
+## 2026-11-11 14:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 integration audit and Firestore hardening
+
+### Completed
+- Re-audited the current admin, report, user, role, Firestore rules, README, handoff, prompts, and UI PDF/extracted screen inventory before editing.
+- Extended the shared `ReportModel` contract with optional `assignedAt`; admin assignment now persists technician UID, name, assignment timestamp, assigned status, and updated timestamp without rewriting unrelated report fields.
+- Added bounded Firestore report synchronization (`createdAt` descending, limit 500), loading/error state, retry handling, and admin UI error/loading feedback for stale or failed refreshes.
+- Fixed nullable repair-note persistence and added focused admin workflow tests for missing-role rejection, invalid transitions, correction requests, and assignment timestamps.
+- Hardened Firestore admin rules to allow only workflow fields and only preserve status or move pending/disputed reports to assigned; technicians cannot modify `assignedAt`.
+- Persisted admin activity events to `/reports/{reportId}/activity/{activityId}` using the shared activity model for Member 8 and downstream citizen/technician visibility.
+- Rechecked `docs/AquaTrace UI.pdf`: the browser renderer still exposes a blank canvas for the single Figma frame; the repository's extracted text remains the available admin review/assignment/activity reference.
 ## 2026-11-11 14:54:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 interactive map and location services
 
 ### Completed
@@ -12,6 +22,44 @@
 ### Checks
 | Command | Result |
 |---------|--------|
+| `dart format lib test` | Pass; changed Dart sources and focused test formatted. |
+| Workspace diagnostics (`get_errors`) | No errors in `report_model.dart`, `data_repository.dart`, admin dashboard/review, or `admin_workflow_test.dart`. |
+| `flutter analyze --no-pub` | Invoked; terminal integration returned formatter output but did not return the analyzer completion line. Workspace diagnostics are clean for touched Dart files. |
+| `flutter test --no-pub test/admin_workflow_test.dart` | Invoked; runner remained active after startup without a completion result and was terminated. No pass count claimed. |
+| `flutter build web --no-pub --no-wasm-dry-run` | Previously invoked and generated `build/web`; this run was not re-completed because Flutter/Dart workers remained non-returning. |
+| App launch | Not verified in this run; no reliable Flutter process completion/device session was available. |
+| PDF review | One-page UI PDF opened and screenshot captured; canvas was blank, extracted text reviewed for admin screens. |
+
+### Outstanding / blockers
+- Live Firebase authorization, permission-denied behavior, assignment against real `/users` technician documents, and Firestore activity reads require authenticated accounts and a configured runtime session.
+- Existing Member 8 timeline UI and Member 6 technician UI must consume the shared Firestore activity and `assignedAt` fields; their modules were not rewritten.
+- The repository still has the unrelated generated `macos/Flutter/GeneratedPluginRegistrant.swift` working-tree change from Flutter tooling; it is excluded from the Member 5 commit.
+
+## 2026-11-11 13:45:07 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 admin dashboard and report management
+
+### Completed
+- Added admin-only dashboard and report-management surfaces with real report counts, status filters, search, priority display, evidence fallback, activity history, empty states, and refresh interaction.
+- Replaced the fixed September trend bars with five weekly buckets derived from report `createdAt` values and a meaningful latest-report date range.
+- Added admin review actions supported by the shared five-status contract: approve-and-assign transitions pending/disputed reports to assigned; request correction keeps the report pending and records an audit note. No unsupported rejected status was invented.
+- Added admin priority updates and technician assignment using existing stored technician UID/name data only; no fabricated availability data is shown.
+- Added repository authorization and status-transition validation. Live Firebase mutations verify `/users/{uid}.role == admin` before admin actions and persist only the intended report fields. The existing Firestore rules remain the server-side authority.
+- Added the declared `assets/icons/` directory so the existing pubspec asset declaration no longer blocks Flutter validation.
+- Files changed: `lib/core/services/data_repository.dart`, `lib/features/admin/presentation/admin_dashboard_view.dart`, `lib/features/admin/presentation/admin_main_shell.dart`, `lib/features/admin/presentation/admin_reports_view.dart`, and `assets/icons/`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — 3 changed Dart files formatted. |
+| `flutter analyze --no-pub` | No Dart errors from workspace diagnostics; the previous missing `assets/icons/` asset blocker was resolved. |
+| `flutter test` / `flutter test --no-pub --reporter compact` | Invoked; terminal integration did not return a final completion line after web compilation began, so a passing test count cannot be claimed. |
+| `flutter build web --no-pub --no-wasm-dry-run` | Invoked; `build/web/index.html` and generated web assets are present, but the terminal did not return a final success line. |
+| PDF inspection | `docs/AquaTrace UI.pdf` located and opened in the browser as a one-page Figma frame; the browser PDF renderer exposed a blank canvas, so extracted project text was used for the screen inventory. |
+
+### Outstanding / blockers
+- End-to-end live Firebase admin writes, permission-denied behavior, and real technician directory selection require authenticated Firebase accounts and current Firestore data; demo identities remain local mock auth.
+- The five-status shared contract has no `rejected` or `correctionRequested` enum, so correction is represented by a pending status plus an audit note. Member 3/6/7/8 integration should preserve this contract.
+- Local commit created after scoped diff review; push status is recorded in the handoff response because the remote requires an explicit authentication check.
+
 | `dart format lib\features\map\presentation\shared_map_view.dart test\map_view_test.dart` | Pass — no formatting changes required. |
 | `flutter test test\map_view_test.dart` | Pass — **11/11**, including map filters, search, coordinate validation, zoom, location permissions, settings-plugin failure, and technician directions handoff. |
 | `flutter test` | Pass — **33/33**. |

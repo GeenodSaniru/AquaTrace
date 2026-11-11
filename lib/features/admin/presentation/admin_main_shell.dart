@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/constants/app_roles.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../map/presentation/shared_map_view.dart';
 import '../../notifications/presentation/shared_notifications_view.dart';
 import '../../profile/presentation/shared_profile_view.dart';
-import '../../reports/presentation/shared_reports_view.dart';
 import 'admin_dashboard_view.dart';
+import 'admin_reports_view.dart';
 
 /// 5-tab main container shell for Admin role.
 class AdminMainShell extends StatefulWidget {
@@ -33,9 +36,15 @@ class _AdminMainShellState extends State<AdminMainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (auth.currentRole != UserRole.admin) {
+      return const Scaffold(
+        body: Center(child: Text('Administrator access is required.')),
+      );
+    }
     final List<Widget> tabs = [
       AdminDashboardView(onNavigateTab: _onTabSelected),
-      const SharedReportsView(),
+      const AdminReportsView(),
       const SharedMapView(),
       const SharedNotificationsView(),
       const SharedProfileView(),
