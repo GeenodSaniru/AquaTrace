@@ -44,7 +44,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
-        Provider<PreferencesService>.value(value: prefsService),
+        ChangeNotifierProvider<PreferencesService>.value(value: prefsService),
         Provider<AuthService>.value(value: authService),
         ChangeNotifierProvider(create: (_) => AuthProvider(authService)),
         ChangeNotifierProvider.value(value: dataRepository),
@@ -71,6 +71,39 @@ class AquaTraceApp extends StatelessWidget {
       navigatorKey: NavigationService.navigatorKey,
       onGenerateRoute: AppRouter.onGenerateRoute,
       home: const RoleGate(),
+      builder: (context, child) {
+        final preferences = context.watch<PreferencesService>();
+        final baseTheme = themeProvider.isDarkMode
+            ? AppTheme.darkTheme
+            : AppTheme.lightTheme;
+        final isDark = themeProvider.isDarkMode;
+        final content = MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(preferences.textScaleFactor),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+
+        if (!preferences.highContrastMode) return content;
+        return Theme(
+          data: baseTheme.copyWith(
+            colorScheme: baseTheme.colorScheme.copyWith(
+              primary: isDark ? Colors.cyanAccent : Colors.blue.shade900,
+              onSurface: isDark ? Colors.white : Colors.black,
+              secondary: isDark ? Colors.cyanAccent : Colors.blue.shade900,
+            ),
+            dividerTheme: baseTheme.dividerTheme.copyWith(
+              color: isDark ? Colors.white70 : Colors.black54,
+              thickness: 1.5,
+            ),
+            textTheme: baseTheme.textTheme.apply(
+              bodyColor: isDark ? Colors.white : Colors.black,
+              displayColor: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          child: content,
+        );
+      },
     );
   }
 }

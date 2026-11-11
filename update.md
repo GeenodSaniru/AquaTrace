@@ -10,6 +10,14 @@
 - Hardened Firestore admin rules to allow only workflow fields and only preserve status or move pending/disputed reports to assigned; technicians cannot modify `assignedAt`.
 - Persisted admin activity events to `/reports/{reportId}/activity/{activityId}` using the shared activity model for Member 8 and downstream citizen/technician visibility.
 - Rechecked `docs/AquaTrace UI.pdf`: the browser renderer still exposes a blank canvas for the single Figma frame; the repository's extracted text remains the available admin review/assignment/activity reference.
+## 2026-11-11 14:54:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 interactive map and location services
+
+### Completed
+- Implemented the shared citizen/technician/admin OpenStreetMap view using the existing `flutter_map`, `latlong2`, and `geolocator` dependencies, with report markers/status colors, detail selection, status filters, local report search, zoom/location controls, attribution, and technician external-directions handoff.
+- Connected the map to the shared Firestore report snapshots with a 500-report query cap; configured Firebase flows do not fall back to demo reports. Invalid/missing coordinates are excluded and surfaced to the user.
+- Added configurable tile URL and attribution, permission/error/retry/loading/empty/offline handling, and README guidance on OSM tile usage and the absence of an external geocoder.
+- Fixed the live-web permission-settings action: browsers now receive instructions to change permission in browser settings instead of invoking unsupported native settings APIs. Missing native settings plugins also show an explicit fallback message.
+- Files changed: `README.md`, `lib/core/config/app_config.dart`, `lib/core/models/report_model.dart`, `lib/core/services/data_repository.dart`, `lib/features/map/presentation/shared_map_view.dart`, `lib/features/technician/presentation/technician_home_view.dart`, `lib/features/technician/presentation/technician_main_shell.dart`, `macos/Flutter/GeneratedPluginRegistrant.swift`, `pubspec.yaml`, `pubspec.lock`, and `test/map_view_test.dart`.
 
 ### Checks
 | Command | Result |
@@ -52,6 +60,103 @@
 - The five-status shared contract has no `rejected` or `correctionRequested` enum, so correction is represented by a pending status plus an audit note. Member 3/6/7/8 integration should preserve this contract.
 - Local commit created after scoped diff review; push status is recorded in the handoff response because the remote requires an explicit authentication check.
 
+| `dart format lib\features\map\presentation\shared_map_view.dart test\map_view_test.dart` | Pass — no formatting changes required. |
+| `flutter test test\map_view_test.dart` | Pass — **11/11**, including map filters, search, coordinate validation, zoom, location permissions, settings-plugin failure, and technician directions handoff. |
+| `flutter test` | Pass — **33/33**. |
+| `flutter analyze` | No Dart diagnostics; exits nonzero only for the existing missing `assets/icons/` directory declared in `pubspec.yaml`. |
+| `flutter build web --no-wasm-dry-run` | Pass — release web bundle built. Flutter reports the same missing `assets/icons/` warning. |
+| Release browser smoke (`http://127.0.0.1:5175/#/map`) | OSM map/tiles, attribution, map controls, empty state, and location-permission message verified. Clicking **App settings** now shows browser-settings guidance without a page error. |
+| `git diff --check` | Pass. |
+
+### Outstanding / blockers
+- No authenticated Firebase session was available, so live Firestore marker reads were not verified; the configured unauthenticated map correctly shows an empty state instead of sample reports.
+- No physical mobile device/emulator was available. Permission grant/denial and plugin failure behavior is covered by mocked geolocator tests; device permission prompts/settings screens were not verified on hardware.
+- No geocoder is configured; search is intentionally limited to report data already loaded by the app.
+- Existing `assets/icons/` directory is missing although declared in `pubspec.yaml`; analyzer/build emit this pre-existing warning.
+
+## 2026-11-10 21:21:00 +0530 (UTC+0530) — Member 2 final regression and handoff
+
+### Completed
+- Re-read repository Markdown guidance, the latest update history, current profile/auth/theme/storage contracts, and inspected the profile/settings cluster in `docs/AquaTrace UI.pdf`.
+- Fixed profile header fallbacks for whitespace-only names and service areas; mapped Firebase Storage `unauthorized` and retry-limit/network failures to clear user guidance.
+- Added final regression coverage for malformed account fields, invalid profile name/phone, photo-library permission denial, upload denial/network failure, unsupported/empty/oversized images, user-scoped preferences, appearance persistence, save/cancel flows, and role-specific account details.
+- Reviewed privacy exposure: profile uses only the authenticated `AuthProvider.currentUser`; Firestore edits continue through the existing safe `AuthProvider.updateProfile` contract; sign-out remains delegated to `AuthProvider.signOut`.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format lib test` | Pass — 55 files, no formatting changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — 36/36 |
+| `flutter build web --release` | Pass — release bundle generated |
+| `flutter run -d web-server --release --web-port 5177` | Pass — release app served; demo citizen profile, appearance control, Edit Profile, Help & Support, and About rendered |
+| `git diff --check` | Pass |
+
+### Remaining work / cross-module dependencies
+- Profile avatar rules are present in `storage.rules` and deployed configuration, but live bucket upload and Storage-rule emulator validation remain unverified; the local shell has no `firebase` or `java` executable. Enable Storage and deploy the reviewed rules before relying on cloud uploads.
+- Notification delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export depend on other services/modules and remain explicitly marked as local-only or unavailable in the UI.
+- Windows desktop build remains unavailable because Windows desktop support is not configured in this checkout; release web build/launch passed.
+
+## 2026-11-10 12:40:24 +0530 (UTC+0530) — Member 2 profile integration QA
+
+### Completed
+- Fast-forwarded `sasundi` to the integrated remote state `3a597e0`, including Member 3's reporting module and Firebase Storage rules configuration.
+- Rechecked the AquaTrace UI PDF and current profile/settings implementation against its profile, edit-profile, notification, location, privacy, accessibility, help/support, and about screens.
+- Added an owner-only Storage rule for `users/{uid}/profile/avatar`, matching the existing profile upload path; reads require sign-in, writes require matching Auth UID, image MIME type, and a 5 MB limit. Existing report-evidence rules are unchanged.
+- Aligned profile-photo validation with the Storage MIME allowlist and added tests for unsupported, empty, and oversized photos, blank profile fields, and persisted appearance.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format lib test` | Pass — 55 files; no formatting changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test test/widget_test.dart` | Pass — 21/21 |
+| `flutter test` | Pass — 33/33, including report-submission tests |
+| `flutter run -d web-server --release --web-port 5176` | Pass — built and served `build/web`; citizen Profile and Accessibility screens rendered |
+| Firebase Storage emulator/rules validation | Not run — `firebase` and `java` executables are unavailable in this shell |
+
+### Remaining work / blockers
+- `storage.rules` now contains the profile-avatar rule and `firebase.json` includes Storage rules, but rules have not been deployed and the live Storage bucket/upload path was not exercised. Enable/configure Firebase Storage and deploy the reviewed rules before relying on cloud uploads.
+- Notification delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export remain local-only or unavailable, as noted in the UI.
+- Windows desktop build remains unavailable because the Windows desktop project is not configured; web release launch is verified.
+
+## 2026-11-09 13:19:39 +0530 (UTC+0530) — Member 2 profile and settings
+
+### Completed
+- Replaced the profile placeholder with authenticated-user account details, role-specific employee ID, profile editing, photo selection/upload flow, appearance preference, and navigation to notification, location, privacy, accessibility, help, and about screens.
+- Added UID-scoped local preference persistence for notification categories, location area/access choice, privacy choices, text size, and contrast. Text scaling and high-contrast styling are applied app-wide; appearance remains persisted by `ThemeProvider`.
+- Added Firebase Storage upload to `users/{uid}/profile/avatar`, image type/size checks, and user-facing picker/upload failure handling. Profile edits still use the existing safe `AuthProvider` update contract.
+- Added widget coverage for preference isolation, role-specific profile fields, all settings navigation, save/cancel, persistence, accessibility settings, and simulated upload-denial behavior.
+- Aligned the Dart SDK minimum with the documented Dart 3.13+ support/current 3.13.0 SDK, added the Firebase Storage dependency/plugin registration, and removed the unused `assets/icons/` directory declaration that prevented Flutter asset bundling.
+
+### Files / modules changed
+- `lib/features/profile/presentation/shared_profile_view.dart`
+- `lib/features/profile/presentation/profile_settings_screens.dart`
+- `lib/features/profile/profile_photo_service.dart`
+- `lib/core/services/preferences_service.dart`
+- `lib/main.dart` (app-wide text scale and contrast application)
+- `test/widget_test.dart`
+- `pubspec.yaml`, `pubspec.lock`, `macos/Flutter/GeneratedPluginRegistrant.swift`
+
+### Checks and outcomes
+| Command | Result |
+|---------|--------|
+| `flutter pub get` | Pass |
+| `dart format lib test` | Pass — 51 files formatted, no changes needed |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test test/widget_test.dart` | Pass — 18/18 |
+| `flutter run -d web-server --release --web-port 5175` | Pass — web release compiled and served; Profile and Notification Settings rendered in browser |
+| `flutter build windows --debug` | Not available — Windows desktop project is not configured in this checkout |
+| `git diff --check` | Pass; generated macOS Swift file reports only a line-ending normalization warning |
+
+### Remaining work / blockers
+- Firebase Storage is not enabled/configured with storage rules in this repository. Real cloud photo upload is not verified; enable Storage and coordinate a self-only rule for `users/{uid}/profile/avatar` before production use. Upload denial is surfaced in the UI.
+- Push delivery, weekly email, GPS permission enforcement, anonymous reporting, community verification, usage analytics, and data export are not connected in this build. Their settings are persisted locally and explicitly identified as not connected.
+- Windows desktop launch/build remains unavailable until desktop support is added to the project. Web release startup is verified.
+
+### Git
+- 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
+- The initial push attempt was rejected, then completed after Git Credential Manager browser authentication. `git ls-remote origin refs/heads/sasundi` verified the branch at `5f155f1fd6ecbe85af2f98533a3c910ac992f594` on 2026-11-09.
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed

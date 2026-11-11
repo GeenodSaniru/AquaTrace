@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/app_config.dart';
 import '../constants/fault_constants.dart';
 import '../errors/app_exception.dart';
 import '../models/activity_timeline_event.dart';
@@ -27,27 +28,37 @@ class DataRepository with ChangeNotifier {
   String? _reportsError;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
+  bool _reportsLoading = false;
+  String? _reportsErrorMessage;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
   bool get isReportsLoading => _isReportsLoading;
   String? get reportsError => _reportsError;
 
-  DataRepository({ReportSubmissionGateway? reportSubmissionGateway})
-    : _reportSubmissionGateway =
-          reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
-    _initialize();
+  DataRepository({
+    ReportSubmissionGateway? reportSubmissionGateway,
+    @visibleForTesting List<ReportModel>? initialReports,
+  }) : _reportSubmissionGateway =
+           reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
+    if (initialReports == null) {
+      _initialize();
+    } else {
+      _reports.addAll(initialReports);
+    }
     if (FirebaseService.isRealFirebase) {
       _listenForReports();
     }
   }
 
   void _initialize() {
-    _reports.addAll(MockData.initialReports);
-    _notifications.addAll(MockData.initialNotifications);
-    _reportTimelines['AT-2026-00124'] = List.from(
-      MockData.activityTimelineFor124,
-    );
+    if (!FirebaseService.isRealFirebase) {
+      _reports.addAll(MockData.initialReports);
+      _notifications.addAll(MockData.initialNotifications);
+      _reportTimelines['AT-2026-00124'] = List.from(
+        MockData.activityTimelineFor124,
+      );
+    }
   }
 
   // --- Reports Query & Management ---
@@ -171,8 +182,73 @@ class DataRepository with ChangeNotifier {
           ..addAll(MockData.initialReports);
         _isReportsLoading = false;
         notifyListeners();
-        return;
+      },
+    );
+  }
+
+  void _listenForUserReports(User? user) {
+    _reportsSubscription?.cancel();
+    _reportsErrorMessage = null;
+    if (user == null) {
+      _reports.clear();
+      _reportsLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    _reportsLoading = true;
+    _reports.clear();
+    notifyListeners();
+    _reportsSubscription = FirebaseFirestore.instance
+        .collection('reports')
+        .orderBy('createdAt', descending: true)
+        .limit(AppConfig.maximumMapReports)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final reports = <ReportModel>[];
+            for (final document in snapshot.docs) {
+              try {
+                reports.add(
+                  ReportModel.fromMap(document.data(), documentId: document.id),
+                );
+              } on Object catch (error, stackTrace) {
+                debugPrint(
+                  '[AquaTrace] Skipping invalid report ${document.id}: '
+                  '$error\n$stackTrace',
+                );
+              }
+            }
+            _reports
+              ..clear()
+              ..addAll(reports);
+            _reportsLoading = false;
+            _reportsErrorMessage = null;
+            notifyListeners();
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _reportsLoading = false;
+            _reportsErrorMessage = _reportSyncErrorMessage(error);
+            debugPrint('[AquaTrace] Report sync failed: $error\n$stackTrace');
+            notifyListeners();
+          },
+        );
+  }
+
+  String _reportSyncErrorMessage(Object error) {
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') {
+        return 'You do not have permission to view reports.';
       }
+      if (error.code == 'unavailable' || error.code == 'deadline-exceeded') {
+        return 'Could not refresh reports. Check your internet connection.';
+      }
+      if (error.code == 'failed-precondition') {
+        return 'Reports could not be loaded because the Firestore query needs configuration.';
+      }
+    }
+    return 'Could not load reports. Please try again.';
+  }
 
       _reportsSubscription = FirebaseFirestore.instance
           .collection('reports')
