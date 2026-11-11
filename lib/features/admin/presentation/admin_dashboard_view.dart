@@ -138,6 +138,17 @@ class AdminDashboardView extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
+            if (dataRepo.reportsError != null)
+              MaterialBanner(
+                content: Text(dataRepo.reportsError!),
+                actions: [
+                  TextButton(
+                    onPressed: dataRepo.retryReportsSync,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

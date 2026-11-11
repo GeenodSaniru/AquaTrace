@@ -1,5 +1,32 @@
 # AquaTrace — Update Log
 
+## 2026-11-11 14:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 integration audit and Firestore hardening
+
+### Completed
+- Re-audited the current admin, report, user, role, Firestore rules, README, handoff, prompts, and UI PDF/extracted screen inventory before editing.
+- Extended the shared `ReportModel` contract with optional `assignedAt`; admin assignment now persists technician UID, name, assignment timestamp, assigned status, and updated timestamp without rewriting unrelated report fields.
+- Added bounded Firestore report synchronization (`createdAt` descending, limit 500), loading/error state, retry handling, and admin UI error/loading feedback for stale or failed refreshes.
+- Fixed nullable repair-note persistence and added focused admin workflow tests for missing-role rejection, invalid transitions, correction requests, and assignment timestamps.
+- Hardened Firestore admin rules to allow only workflow fields and only preserve status or move pending/disputed reports to assigned; technicians cannot modify `assignedAt`.
+- Persisted admin activity events to `/reports/{reportId}/activity/{activityId}` using the shared activity model for Member 8 and downstream citizen/technician visibility.
+- Rechecked `docs/AquaTrace UI.pdf`: the browser renderer still exposes a blank canvas for the single Figma frame; the repository's extracted text remains the available admin review/assignment/activity reference.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass; changed Dart sources and focused test formatted. |
+| Workspace diagnostics (`get_errors`) | No errors in `report_model.dart`, `data_repository.dart`, admin dashboard/review, or `admin_workflow_test.dart`. |
+| `flutter analyze --no-pub` | Invoked; terminal integration returned formatter output but did not return the analyzer completion line. Workspace diagnostics are clean for touched Dart files. |
+| `flutter test --no-pub test/admin_workflow_test.dart` | Invoked; runner remained active after startup without a completion result and was terminated. No pass count claimed. |
+| `flutter build web --no-pub --no-wasm-dry-run` | Previously invoked and generated `build/web`; this run was not re-completed because Flutter/Dart workers remained non-returning. |
+| App launch | Not verified in this run; no reliable Flutter process completion/device session was available. |
+| PDF review | One-page UI PDF opened and screenshot captured; canvas was blank, extracted text reviewed for admin screens. |
+
+### Outstanding / blockers
+- Live Firebase authorization, permission-denied behavior, assignment against real `/users` technician documents, and Firestore activity reads require authenticated accounts and a configured runtime session.
+- Existing Member 8 timeline UI and Member 6 technician UI must consume the shared Firestore activity and `assignedAt` fields; their modules were not rewritten.
+- The repository still has the unrelated generated `macos/Flutter/GeneratedPluginRegistrant.swift` working-tree change from Flutter tooling; it is excluded from the Member 5 commit.
+
 ## 2026-11-11 13:45:07 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 admin dashboard and report management
 
 ### Completed

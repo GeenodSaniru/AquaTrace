@@ -44,6 +44,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         .reports
         .where(_matches)
         .toList();
+    final dataRepo = context.read<DataRepository>();
     return Scaffold(
       appBar: AppBar(title: const Text('Report Review')),
       body: Column(
@@ -93,8 +94,20 @@ class _AdminReportsViewState extends State<AdminReportsView> {
                 ),
               ],
             ),
+          if (dataRepo.reportsError != null)
+            MaterialBanner(
+              content: Text(dataRepo.reportsError!),
+              actions: [
+                TextButton(
+                  onPressed: dataRepo.retryReportsSync,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           Expanded(
-            child: reports.isEmpty
+            child: dataRepo.isReportsLoading && reports.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : reports.isEmpty
                 ? const AppEmptyState(
                     title: 'No matching reports',
                     description: 'Try another status or search term.',

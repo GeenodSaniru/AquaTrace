@@ -23,11 +23,15 @@ class DataRepository with ChangeNotifier {
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
   final Set<String> _submissionsInFlight = {};
+  bool _isReportsLoading = false;
+  String? _reportsError;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
+  bool get isReportsLoading => _isReportsLoading;
+  String? get reportsError => _reportsError;
 
   DataRepository({ReportSubmissionGateway? reportSubmissionGateway})
     : _reportSubmissionGateway =
@@ -157,18 +161,23 @@ class DataRepository with ChangeNotifier {
   }
 
   void _listenForReports() {
+    _isReportsLoading = true;
+    _reportsError = null;
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       _reportsSubscription?.cancel();
       if (user == null) {
         _reports
           ..clear()
           ..addAll(MockData.initialReports);
+        _isReportsLoading = false;
         notifyListeners();
         return;
       }
 
       _reportsSubscription = FirebaseFirestore.instance
           .collection('reports')
+          .orderBy('createdAt', descending: true)
+          .limit(500)
           .snapshots()
           .listen(
             (snapshot) {
@@ -187,13 +196,25 @@ class DataRepository with ChangeNotifier {
               _reports
                 ..clear()
                 ..addAll(reports);
+              _isReportsLoading = false;
+              _reportsError = null;
               notifyListeners();
             },
             onError: (Object error, StackTrace stackTrace) {
+              _isReportsLoading = false;
+              _reportsError = 'Reports could not be refreshed. Pull to retry.';
               debugPrint('[AquaTrace] Report sync failed: $error');
+              notifyListeners();
             },
           );
     });
+  }
+
+  void retryReportsSync() {
+    if (!FirebaseService.isRealFirebase) return;
+    _reportsSubscription?.cancel();
+    _authSubscription?.cancel();
+    _listenForReports();
   }
 
   @override
@@ -224,7 +245,7 @@ class DataRepository with ChangeNotifier {
       await _persistReportUpdate(reportId, {
         'status': newStatus.name,
         'updatedAt': updatedAt.toIso8601String(),
-        if (note case final note?) 'repairNotes': note,
+        if (note != null) 'repairNotes': note,
       });
       _reports[index] = updated;
 
@@ -263,12 +284,14 @@ class DataRepository with ChangeNotifier {
       await _persistReportUpdate(reportId, {
         'assignedTechnicianUid': technicianUid,
         'assignedTechnicianName': technicianName,
+        'assignedAt': updatedAt.toIso8601String(),
         'status': FaultStatus.assigned.name,
         'updatedAt': updatedAt.toIso8601String(),
       });
       _reports[index] = _reports[index].copyWith(
         assignedTechnicianUid: technicianUid,
         assignedTechnicianName: technicianName,
+        assignedAt: updatedAt,
         status: FaultStatus.assigned,
         updatedAt: updatedAt,
       );
@@ -393,6 +416,18 @@ class DataRepository with ChangeNotifier {
         timestamp: DateTime.now(),
       ),
     );
+    if (FirebaseService.isRealFirebase) {
+      final event = list.last;
+      FirebaseFirestore.instance
+          .collection('reports')
+          .doc(reportId)
+          .collection('activity')
+          .doc(event.id)
+          .set(event.toMap())
+          .catchError((error) {
+            debugPrint('[AquaTrace] Activity write failed: $error');
+          });
+    }
   }
 
   // --- Notifications ---

@@ -147,6 +147,7 @@ All team members must conform to these shared document collections:
   "afterImageUrl": null,
   "assignedTechnicianUid": "demo-tech-002",
   "assignedTechnicianName": "Kasun Jayawardena",
+  "assignedAt": "2026-09-24T11:20:00.000Z",
   "assignedArea": "Colombo 03",
   "isEmergency": false,
   "verificationCount": 3,
