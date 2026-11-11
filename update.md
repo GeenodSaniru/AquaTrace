@@ -1,5 +1,31 @@
 # AquaTrace — Update Log
 
+## 2026-11-11 14:54:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 interactive map and location services
+
+### Completed
+- Implemented the shared citizen/technician/admin OpenStreetMap view using the existing `flutter_map`, `latlong2`, and `geolocator` dependencies, with report markers/status colors, detail selection, status filters, local report search, zoom/location controls, attribution, and technician external-directions handoff.
+- Connected the map to the shared Firestore report snapshots with a 500-report query cap; configured Firebase flows do not fall back to demo reports. Invalid/missing coordinates are excluded and surfaced to the user.
+- Added configurable tile URL and attribution, permission/error/retry/loading/empty/offline handling, and README guidance on OSM tile usage and the absence of an external geocoder.
+- Fixed the live-web permission-settings action: browsers now receive instructions to change permission in browser settings instead of invoking unsupported native settings APIs. Missing native settings plugins also show an explicit fallback message.
+- Files changed: `README.md`, `lib/core/config/app_config.dart`, `lib/core/models/report_model.dart`, `lib/core/services/data_repository.dart`, `lib/features/map/presentation/shared_map_view.dart`, `lib/features/technician/presentation/technician_home_view.dart`, `lib/features/technician/presentation/technician_main_shell.dart`, `macos/Flutter/GeneratedPluginRegistrant.swift`, `pubspec.yaml`, `pubspec.lock`, and `test/map_view_test.dart`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib\features\map\presentation\shared_map_view.dart test\map_view_test.dart` | Pass — no formatting changes required. |
+| `flutter test test\map_view_test.dart` | Pass — **11/11**, including map filters, search, coordinate validation, zoom, location permissions, settings-plugin failure, and technician directions handoff. |
+| `flutter test` | Pass — **33/33**. |
+| `flutter analyze` | No Dart diagnostics; exits nonzero only for the existing missing `assets/icons/` directory declared in `pubspec.yaml`. |
+| `flutter build web --no-wasm-dry-run` | Pass — release web bundle built. Flutter reports the same missing `assets/icons/` warning. |
+| Release browser smoke (`http://127.0.0.1:5175/#/map`) | OSM map/tiles, attribution, map controls, empty state, and location-permission message verified. Clicking **App settings** now shows browser-settings guidance without a page error. |
+| `git diff --check` | Pass. |
+
+### Outstanding / blockers
+- No authenticated Firebase session was available, so live Firestore marker reads were not verified; the configured unauthenticated map correctly shows an empty state instead of sample reports.
+- No physical mobile device/emulator was available. Permission grant/denial and plugin failure behavior is covered by mocked geolocator tests; device permission prompts/settings screens were not verified on hardware.
+- No geocoder is configured; search is intentionally limited to report data already loaded by the app.
+- Existing `assets/icons/` directory is missing although declared in `pubspec.yaml`; analyzer/build emit this pre-existing warning.
+
 ## 2026-11-10 21:21:00 +0530 (UTC+0530) — Member 2 final regression and handoff
 
 ### Completed

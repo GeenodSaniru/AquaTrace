@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/report_model.dart';
 import '../../map/presentation/shared_map_view.dart';
 import '../../notifications/presentation/shared_notifications_view.dart';
 import '../../profile/presentation/shared_profile_view.dart';
@@ -18,6 +19,7 @@ class TechnicianMainShell extends StatefulWidget {
 
 class _TechnicianMainShellState extends State<TechnicianMainShell> {
   late int _currentIndex;
+  ReportModel? _selectedMapReport;
 
   @override
   void initState() {
@@ -25,9 +27,10 @@ class _TechnicianMainShellState extends State<TechnicianMainShell> {
     _currentIndex = widget.initialTab;
   }
 
-  void _onTabSelected(int index) {
+  void _onTabSelected(int index, [ReportModel? report]) {
     setState(() {
       _currentIndex = index;
+      _selectedMapReport = report;
     });
   }
 
@@ -36,7 +39,7 @@ class _TechnicianMainShellState extends State<TechnicianMainShell> {
     final List<Widget> tabs = [
       TechnicianHomeView(onNavigateTab: _onTabSelected),
       const SharedReportsView(),
-      const SharedMapView(),
+      SharedMapView(initialReport: _selectedMapReport),
       const SharedNotificationsView(),
       const SharedProfileView(),
     ];

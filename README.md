@@ -245,6 +245,22 @@ UI buttons remain visible per the design PDF but are **gracefully disabled** unt
 
 > **Security Reminder**: Never commit service-account JSON keys, `.p8` certificates, or `.env` secrets.
 
+### 6.4 Maps, tile sources, and location
+- The shared map observes the repository's `/reports` snapshots, capped at the **500 most recently created reports** per signed-in session. Reports without valid numeric latitude/longitude are not plotted.
+- Demo report fixtures are used only when Firebase is not configured. A configured Firebase session never falls back to sample reports.
+- Search matches report IDs, addresses, fault descriptions, reporter names, and assigned technician names already loaded by the app. No geocoding service is configured, so arbitrary place-name search is not sent to a third party.
+- The default tile URL is OpenStreetMap's standard tile endpoint. The app displays map attribution and identifies its Android/iOS tile client. Do not bulk-download, prefetch, or persistently cache public OSM tiles. For production traffic, configure a tile provider whose usage policy matches the deployment and supply its required attribution:
+
+  ```bash
+  flutter run -d chrome \
+    --dart-define=AQUATRACE_MAP_TILE_URL=https://tiles.example.org/{z}/{x}/{y}.png \
+  --dart-define=AQUATRACE_MAP_TILE_ATTRIBUTION="Example Maps" \
+  --dart-define=AQUATRACE_MAP_ATTRIBUTION_URL=https://tiles.example.org/attribution
+  ```
+
+  The URL and attribution are configuration, not credentials. Keep provider API keys out of source control; use an approved runtime configuration mechanism if a provider requires a key.
+- Current-location access is requested only after the user taps the location control. Directions open an external maps app using the report coordinates; AquaTrace does not provide in-app turn-by-turn routing.
+
 ---
 
 ## 7. Role security model (Member 1)
