@@ -48,6 +48,14 @@ class ReportModel {
     this.updatedAt,
   });
 
+  bool get hasValidLocation =>
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
+
   Map<String, dynamic> toMap() {
     return {
       'reportId': reportId,
@@ -83,8 +91,8 @@ class ReportModel {
       description: map['description'] as String? ?? '',
       severity: FaultSeverity.fromString(map['severity'] as String?),
       status: FaultStatus.fromString(map['status'] as String?),
-      latitude: (map['latitude'] as num?)?.toDouble() ?? 6.9271,
-      longitude: (map['longitude'] as num?)?.toDouble() ?? 79.8612,
+      latitude: _coordinateFromMap(map['latitude'], -90, 90),
+      longitude: _coordinateFromMap(map['longitude'], -180, 180),
       address: map['address'] as String? ?? 'Colombo',
       beforeImageUrl: map['beforeImageUrl'] as String?,
       afterImageUrl: map['afterImageUrl'] as String?,
@@ -102,6 +110,14 @@ class ReportModel {
           ? DateTime.tryParse(map['updatedAt'].toString())
           : null,
     );
+  }
+
+  static double _coordinateFromMap(dynamic value, double min, double max) {
+    if (value is! num) return double.nan;
+    final coordinate = value.toDouble();
+    return coordinate.isFinite && coordinate >= min && coordinate <= max
+        ? coordinate
+        : double.nan;
   }
 
   ReportModel copyWith({

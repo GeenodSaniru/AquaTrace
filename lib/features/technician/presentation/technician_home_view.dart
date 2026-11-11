@@ -11,11 +11,12 @@ import '../../../core/widgets/app_metric_card.dart';
 import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_report_card_tile.dart';
 import '../../../core/widgets/app_status_badge.dart';
+import '../../../core/models/report_model.dart';
 import '../../auth/providers/auth_provider.dart';
 
 /// Technician dashboard view conforming to the AquaTrace design specifications.
 class TechnicianHomeView extends StatelessWidget {
-  final Function(int)? onNavigateTab;
+  final void Function(int, [ReportModel?])? onNavigateTab;
 
   const TechnicianHomeView({super.key, this.onNavigateTab});
 
@@ -190,7 +191,7 @@ class TechnicianHomeView extends StatelessWidget {
                           child: AppButton(
                             label: 'Navigate',
                             icon: Icons.navigation_rounded,
-                            onPressed: () => onNavigateTab?.call(2),
+                            onPressed: () => onNavigateTab?.call(2, nextJob),
                           ),
                         ),
                       ],
