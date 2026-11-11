@@ -210,13 +210,22 @@ class DataRepository with ChangeNotifier {
     required String actorRole,
     String? note,
   }) async {
+    await _requireAuthorizedActor(actorRole);
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
+      final report = _reports[index];
+      _validateStatusTransition(report.status, newStatus, actorRole);
+      final updatedAt = DateTime.now();
       final updated = _reports[index].copyWith(
         status: newStatus,
-        updatedAt: DateTime.now(),
-        repairNotes: note ?? _reports[index].repairNotes,
+        updatedAt: updatedAt,
+        repairNotes: note ?? report.repairNotes,
       );
+      await _persistReportUpdate(reportId, {
+        'status': newStatus.name,
+        'updatedAt': updatedAt.toIso8601String(),
+        if (note case final note?) 'repairNotes': note,
+      });
       _reports[index] = updated;
 
       _addTimelineEvent(
@@ -240,13 +249,28 @@ class DataRepository with ChangeNotifier {
     required String technicianName,
     required String adminName,
   }) async {
+    await _requireAuthorizedActor('Admin');
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
+      final report = _reports[index];
+      if (report.status != FaultStatus.pending &&
+          report.status != FaultStatus.disputed) {
+        throw const ValidationException(
+          'Only pending or disputed reports can be assigned.',
+        );
+      }
+      final updatedAt = DateTime.now();
+      await _persistReportUpdate(reportId, {
+        'assignedTechnicianUid': technicianUid,
+        'assignedTechnicianName': technicianName,
+        'status': FaultStatus.assigned.name,
+        'updatedAt': updatedAt.toIso8601String(),
+      });
       _reports[index] = _reports[index].copyWith(
         assignedTechnicianUid: technicianUid,
         assignedTechnicianName: technicianName,
         status: FaultStatus.assigned,
-        updatedAt: DateTime.now(),
+        updatedAt: updatedAt,
       );
 
       _addTimelineEvent(
@@ -260,6 +284,86 @@ class DataRepository with ChangeNotifier {
 
       notifyListeners();
     }
+  }
+
+  Future<void> updateReportSeverity({
+    required String reportId,
+    required FaultSeverity severity,
+    required String adminName,
+  }) async {
+    await _requireAuthorizedActor('Admin');
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) return;
+    final updatedAt = DateTime.now();
+    await _persistReportUpdate(reportId, {
+      'severity': severity.name,
+      'updatedAt': updatedAt.toIso8601String(),
+    });
+    _reports[index] = _reports[index].copyWith(
+      severity: severity,
+      updatedAt: updatedAt,
+    );
+    _addTimelineEvent(
+      reportId: reportId,
+      title: 'Priority Updated',
+      description: 'Priority set to ${severity.displayName} by $adminName.',
+      actorName: adminName,
+      actorRole: 'Admin',
+      status: _reports[index].status,
+    );
+    notifyListeners();
+  }
+
+  Future<void> _requireAuthorizedActor(String actorRole) async {
+    if (actorRole.trim().toLowerCase() == 'admin' &&
+        FirebaseService.isRealFirebase) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        throw const PermissionException('Sign in as an administrator first.');
+      }
+      final user = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (user.data()?['role'] != 'admin') {
+        throw const PermissionException('Administrator access is required.');
+      }
+    } else if (actorRole.trim().isEmpty) {
+      throw const PermissionException('A signed-in role is required.');
+    }
+  }
+
+  void _validateStatusTransition(
+    FaultStatus current,
+    FaultStatus next,
+    String actorRole,
+  ) {
+    if (current == next) return;
+    final allowed = switch (actorRole.trim().toLowerCase()) {
+      'admin' =>
+        current == FaultStatus.pending && next == FaultStatus.assigned ||
+            current == FaultStatus.disputed && next == FaultStatus.assigned,
+      'technician' =>
+        (current == FaultStatus.assigned && next == FaultStatus.ongoing) ||
+            (current == FaultStatus.ongoing && next == FaultStatus.completed),
+      _ => false,
+    };
+    if (!allowed) {
+      throw ValidationException(
+        'Cannot change ${current.displayName} to ${next.displayName}.',
+      );
+    }
+  }
+
+  Future<void> _persistReportUpdate(
+    String reportId,
+    Map<String, dynamic> changes,
+  ) async {
+    if (!FirebaseService.isRealFirebase) return;
+    await FirebaseFirestore.instance
+        .collection('reports')
+        .doc(reportId)
+        .update(changes);
   }
 
   // --- Activity History ---

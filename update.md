@@ -1,5 +1,30 @@
 # AquaTrace — Update Log
 
+## 2026-11-11 13:45:07 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 admin dashboard and report management
+
+### Completed
+- Added admin-only dashboard and report-management surfaces with real report counts, status filters, search, priority display, evidence fallback, activity history, empty states, and refresh interaction.
+- Replaced the fixed September trend bars with five weekly buckets derived from report `createdAt` values and a meaningful latest-report date range.
+- Added admin review actions supported by the shared five-status contract: approve-and-assign transitions pending/disputed reports to assigned; request correction keeps the report pending and records an audit note. No unsupported rejected status was invented.
+- Added admin priority updates and technician assignment using existing stored technician UID/name data only; no fabricated availability data is shown.
+- Added repository authorization and status-transition validation. Live Firebase mutations verify `/users/{uid}.role == admin` before admin actions and persist only the intended report fields. The existing Firestore rules remain the server-side authority.
+- Added the declared `assets/icons/` directory so the existing pubspec asset declaration no longer blocks Flutter validation.
+- Files changed: `lib/core/services/data_repository.dart`, `lib/features/admin/presentation/admin_dashboard_view.dart`, `lib/features/admin/presentation/admin_main_shell.dart`, `lib/features/admin/presentation/admin_reports_view.dart`, and `assets/icons/`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — 3 changed Dart files formatted. |
+| `flutter analyze --no-pub` | No Dart errors from workspace diagnostics; the previous missing `assets/icons/` asset blocker was resolved. |
+| `flutter test` / `flutter test --no-pub --reporter compact` | Invoked; terminal integration did not return a final completion line after web compilation began, so a passing test count cannot be claimed. |
+| `flutter build web --no-pub --no-wasm-dry-run` | Invoked; `build/web/index.html` and generated web assets are present, but the terminal did not return a final success line. |
+| PDF inspection | `docs/AquaTrace UI.pdf` located and opened in the browser as a one-page Figma frame; the browser PDF renderer exposed a blank canvas, so extracted project text was used for the screen inventory. |
+
+### Outstanding / blockers
+- End-to-end live Firebase admin writes, permission-denied behavior, and real technician directory selection require authenticated Firebase accounts and current Firestore data; demo identities remain local mock auth.
+- The five-status shared contract has no `rejected` or `correctionRequested` enum, so correction is represented by a pending status plus an audit note. Member 3/6/7/8 integration should preserve this contract.
+- Local commit created after scoped diff review; push status is recorded in the handoff response because the remote requires an explicit authentication check.
+
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed

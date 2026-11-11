@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_roles.dart';
 import '../../../core/constants/fault_constants.dart';
+import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_header_bar.dart';
@@ -19,6 +21,11 @@ class AdminDashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    if (authProvider.currentRole != UserRole.admin) {
+      return const Scaffold(
+        body: Center(child: Text('Administrator access is required.')),
+      );
+    }
     final dataRepo = Provider.of<DataRepository>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -43,6 +50,11 @@ class AdminDashboardView extends StatelessWidget {
     final disputedCount = dataRepo.reports
         .where((r) => r.status == FaultStatus.disputed)
         .length;
+    final trend = _buildTrend(dataRepo.reports);
+    final trendTotal = trend.fold<int>(
+      0,
+      (total, bucket) => total + bucket.count,
+    );
 
     return Scaffold(
       appBar: AppHeaderBar(
@@ -126,7 +138,6 @@ class AdminDashboardView extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Report Trend Card
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,7 +146,7 @@ class AdminDashboardView extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Report Trend — Sep 2026',
+                        'Report trend · ${trend.first.label} - ${trend.last.label}',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -144,8 +155,8 @@ class AdminDashboardView extends StatelessWidget {
                               : AppColors.lightTextPrimary,
                         ),
                       ),
-                      const Text(
-                        '5 Total',
+                      Text(
+                        '$trendTotal total',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -161,33 +172,20 @@ class AdminDashboardView extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildTrendBar(
-                          label: 'Sep 1',
-                          heightPercent: 0.35,
-                          count: 1,
-                        ),
-                        _buildTrendBar(
-                          label: 'Sep 7',
-                          heightPercent: 0.20,
-                          count: 0,
-                        ),
-                        _buildTrendBar(
-                          label: 'Sep 14',
-                          heightPercent: 0.60,
-                          count: 2,
-                        ),
-                        _buildTrendBar(
-                          label: 'Sep 21',
-                          heightPercent: 0.40,
-                          count: 1,
-                        ),
-                        _buildTrendBar(
-                          label: 'Sep 28',
-                          heightPercent: 0.50,
-                          count: 1,
-                        ),
-                      ],
+                      children: trend
+                          .map(
+                            (bucket) => _buildTrendBar(
+                              label: bucket.label,
+                              heightPercent: trendTotal == 0
+                                  ? 0
+                                  : bucket.count /
+                                        trend
+                                            .map((b) => b.count)
+                                            .reduce((a, b) => a > b ? a : b),
+                              count: bucket.count,
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
                 ],
@@ -292,6 +290,32 @@ class AdminDashboardView extends StatelessWidget {
     );
   }
 
+  List<_TrendBucket> _buildTrend(List<ReportModel> reports) {
+    final latest =
+        reports.fold<DateTime?>(
+          null,
+          (current, report) =>
+              current == null || report.createdAt.isAfter(current)
+              ? report.createdAt
+              : current,
+        ) ??
+        DateTime.now();
+    final start = DateTime(
+      latest.year,
+      latest.month,
+      latest.day,
+    ).subtract(const Duration(days: 28));
+    return List.generate(5, (index) {
+      final bucketStart = start.add(Duration(days: index * 7));
+      final bucketEnd = bucketStart.add(const Duration(days: 7));
+      final count = reports.where((report) {
+        return !report.createdAt.isBefore(bucketStart) &&
+            report.createdAt.isBefore(bucketEnd);
+      }).length;
+      return _TrendBucket(DateFormat('MMM d').format(bucketStart), count);
+    });
+  }
+
   Widget _buildQuickActionTile({
     required BuildContext context,
     required IconData icon,
@@ -337,4 +361,11 @@ class AdminDashboardView extends StatelessWidget {
       onTap: onTap,
     );
   }
+}
+
+class _TrendBucket {
+  final String label;
+  final int count;
+
+  const _TrendBucket(this.label, this.count);
 }
