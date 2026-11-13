@@ -1,5 +1,31 @@
 # AquaTrace — Update Log
 
+## 2026-11-13 20:59:46 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 final map QA
+
+### Completed
+- Re-audited the map implementation, shared report/model contracts, role handoff documentation, README, prior update entries, Git status, and the map-related UI PDF inventory before editing.
+- Made map search functional across report ID, address, reporter, and fault type while retaining status filter chips and `FaultStatus.color` marker/legend colors.
+- Added safe coordinate validation to `ReportModel.fromMap`; missing, non-finite, or out-of-range reports are marked non-mappable and skipped by the map instead of being placed at a false default location.
+- Added current-location service checks, permission request/denial handling, unavailable-location feedback, map-readiness guards, and bounded zoom controls.
+- Added coordinate regression coverage for valid, missing, and out-of-range report coordinates.
+- Preserved the existing `flutter_map` tile boundary and avoided unsupported offline tile API changes; no repeated Firestore reads were added by the map.
+- Rechecked `docs/AquaTrace UI.pdf`; the browser exposes a blank canvas for its single Figma frame, while the extracted screen inventory confirms map search, nearby markers, status filters, and zoom controls.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/map/presentation/shared_map_view.dart lib/core/models/report_model.dart test/map_regression_test.dart` | Pass; all three files formatted. |
+| Workspace diagnostics (`get_errors`) | No errors in the map view, report model, or coordinate regression test. |
+| `flutter analyze --no-pub` | Invoked; terminal did not return a completion line. Focused workspace diagnostics are clean. |
+| `flutter test --no-pub test/map_regression_test.dart` | Invoked; runner did not return a completion result, so no passing count is claimed. |
+| `flutter run -d chrome --web-port 5174` | Reached Chrome debug launch but did not complete compilation; browser received HTML for `main.dart.js` and refused execution due to MIME type. Process stopped. |
+| PDF review | Single-page PDF opened and screenshot captured; rendered canvas was blank, extracted text used for map screen confirmation. |
+
+### Limitations / blockers
+- Live tile loading/offline fallback, browser geolocation prompts, and navigation handoff could not be exercised because the Flutter web debug build did not complete and no authenticated runtime/device was available.
+- The existing map detail interaction remains a modal report summary; a dedicated cross-module report-detail route is not defined by the shared routing contract.
+- Firestore performance is bounded by the repository's existing report synchronization limit; the map itself performs no additional Firestore queries.
+
 ## 2026-11-11 14:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 integration audit and Firestore hardening
 
 ### Completed
