@@ -1,5 +1,84 @@
 # AquaTrace — Update Log
 
+## 2026-11-14 22:15:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 final admin QA and map compatibility repair
+
+### Completed
+- Re-read the repository Markdown guidance, README/shared Firestore contracts, Member 1 handoff, prior `update.md` entries, Member 5 prompts, current admin/repository/rules/model code, and the admin screens in the UI PDF.
+- Audited dashboard counts/trends, report filters/search/detail/evidence fallback, review decisions, priority updates, assignment timestamps, activity writes, role gates, empty/loading/error states, and stale-refresh paths.
+- Restored `DataRepository` compatibility aliases consumed by the merged map module (`reportsLoading`, `reportsErrorMessage`, and `retryReportSync`) without changing the existing admin aliases or Firestore query cap.
+- Added empty-repository regression coverage while preserving unauthorized-role, invalid-transition, correction, assignment, and assignment-time tests.
+- Confirmed client role gates are backed by repository Firebase role verification and Firestore rules; technician/admin/citizen modules continue to use the shared report/activity contracts without direct rewrites.
+- Re-inspected the visible one-page Figma contact sheet. Admin dashboard, report review/detail, assignment, and activity-style screens match the implemented workflow surfaces.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart test/admin_workflow_test.dart` | Pass; no formatting changes required. |
+| Workspace diagnostics (`get_errors`) | No errors in repository, map compatibility surface, admin dashboard/review, or admin workflow tests. |
+| `flutter analyze --no-pub` | Invoked; local Flutter runner did not return a completion line. Focused diagnostics are clean. |
+| `flutter test --no-pub test/admin_workflow_test.dart -r expanded` | Invoked; runner did not return a completion result/count. No pass count claimed. |
+| `flutter build web --release --no-pub --no-wasm-dry-run` | Invoked; runner stalled before a fresh artifact was produced. Prior integrated release build remains recorded in history. |
+| App launch | Attempted through Chrome in prior QA; current Flutter runner remained non-returning before a stable session. |
+| PDF review | Passed visual inspection of the available contact sheet; browser PDF canvas is a single-page Figma sheet. |
+| `git diff --check` | Pass before commit. |
+
+### Limitations / blockers
+- Live admin/technician Firebase accounts, permission-denied Firestore behavior, activity reads, assignment against current technician user documents, and push notification delivery require configured cloud/runtime sessions.
+- Flutter test/analyzer/build commands remain blocked by the local runner hanging after startup; code diagnostics and focused assertions are clean, but no test count is claimed.
+- No changes were made to Member 3, 6, 7, or 8 feature modules; handoff remains through the shared `ReportModel`, report status enum, activity subcollection, and notification contracts.
+
+## 2026-11-13 21:26:07 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 admin regression and Firestore refresh repair
+
+### Completed
+- Re-read all repository Markdown guidance, README contracts, Member 1 handoff, prior update entries, Member 5 prompts, current admin/repository/model/rules files, and the shared UI PDF before editing.
+- Fixed a merged `DataRepository` regression where the Firebase auth listener did not call the bounded `_listenForUserReports` subscription and an obsolete duplicate listener block remained after the sync error helper.
+- Unified admin loading/error getters with the active report-sync state, restoring live refresh behavior for dashboard counts, analytics, filters, and report review.
+- Confirmed admin mutations remain role-gated in the repository and Firestore rules; assignment persists technician UID/name, `assignedAt`, assigned status, and `updatedAt` without overwriting unrelated report fields.
+- Confirmed activity events use the shared `/reports/{reportId}/activity/{activityId}` contract for downstream Member 6/7/8 visibility.
+- Re-inspected the one-page AquaTrace UI PDF in the browser. The visible Figma contact sheet includes the admin dashboard, report list/detail, assignment, and activity-style screens; the implemented surfaces remain aligned with those documented workflows.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/admin/presentation/admin_dashboard_view.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart` | Pass; no formatting changes required. |
+| Workspace diagnostics (`get_errors`) | No errors in repository, admin dashboard/review, report model, or admin workflow test. |
+| `flutter analyze --no-pub` | Invoked; terminal did not return a completion line. Focused diagnostics are clean. |
+| `flutter test --no-pub test/admin_workflow_test.dart -r expanded` | Invoked; terminal returned formatter output but no test completion/count, so no passing result is claimed. |
+| `flutter build web --no-pub --no-wasm-dry-run` | Not re-completed in this run because the local Flutter runner remained non-returning; prior integrated release web build is recorded in repository history. |
+| App launch | Not completed in this run because the local Flutter runner did not reach a stable debug/release session. |
+| `git diff --check` | Pass before commit. |
+
+### Outstanding / blockers
+- Live Firestore authorization, real admin/technician accounts, activity reads, and assignment against current `/users` technician documents remain environment-dependent.
+- Flutter analyzer/test/build completion is blocked by the local runner hanging after startup; no test count or launch success is claimed.
+- No changes were made to Member 3, 6, 7, or 8 feature modules; they should consume the shared report/activity contracts as documented.
+
+## 2026-11-13 20:59:46 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 final map QA
+
+### Completed
+- Re-audited the map implementation, shared report/model contracts, role handoff documentation, README, prior update entries, Git status, and the map-related UI PDF inventory before editing.
+- Made map search functional across report ID, address, reporter, and fault type while retaining status filter chips and `FaultStatus.color` marker/legend colors.
+- Added safe coordinate validation to `ReportModel.fromMap`; missing, non-finite, or out-of-range reports are marked non-mappable and skipped by the map instead of being placed at a false default location.
+- Added current-location service checks, permission request/denial handling, unavailable-location feedback, map-readiness guards, and bounded zoom controls.
+- Added coordinate regression coverage for valid, missing, and out-of-range report coordinates.
+- Preserved the existing `flutter_map` tile boundary and avoided unsupported offline tile API changes; no repeated Firestore reads were added by the map.
+- Rechecked `docs/AquaTrace UI.pdf`; the browser exposes a blank canvas for its single Figma frame, while the extracted screen inventory confirms map search, nearby markers, status filters, and zoom controls.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/map/presentation/shared_map_view.dart lib/core/models/report_model.dart test/map_regression_test.dart` | Pass; all three files formatted. |
+| Workspace diagnostics (`get_errors`) | No errors in the map view, report model, or coordinate regression test. |
+| `flutter analyze --no-pub` | Invoked; terminal did not return a completion line. Focused workspace diagnostics are clean. |
+| `flutter test --no-pub test/map_regression_test.dart` | Invoked; runner did not return a completion result, so no passing count is claimed. |
+| `flutter run -d chrome --web-port 5174` | Reached Chrome debug launch but did not complete compilation; browser received HTML for `main.dart.js` and refused execution due to MIME type. Process stopped. |
+| PDF review | Single-page PDF opened and screenshot captured; rendered canvas was blank, extracted text used for map screen confirmation. |
+
+### Limitations / blockers
+- Live tile loading/offline fallback, browser geolocation prompts, and navigation handoff could not be exercised because the Flutter web debug build did not complete and no authenticated runtime/device was available.
+- The existing map detail interaction remains a modal report summary; a dedicated cross-module report-detail route is not defined by the shared routing contract.
+- Firestore performance is bounded by the repository's existing report synchronization limit; the map itself performs no additional Firestore queries.
+
 ## 2026-11-11 14:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 integration audit and Firestore hardening
 
 ### Completed

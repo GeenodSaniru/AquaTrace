@@ -24,8 +24,6 @@ class DataRepository with ChangeNotifier {
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
   final Set<String> _submissionsInFlight = {};
-  bool _isReportsLoading = false;
-  String? _reportsError;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
   bool _reportsLoading = false;
@@ -33,8 +31,10 @@ class DataRepository with ChangeNotifier {
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
-  bool get isReportsLoading => _isReportsLoading;
-  String? get reportsError => _reportsError;
+  bool get isReportsLoading => _reportsLoading;
+  String? get reportsError => _reportsErrorMessage;
+  bool get reportsLoading => _reportsLoading;
+  String? get reportsErrorMessage => _reportsErrorMessage;
 
   DataRepository({
     ReportSubmissionGateway? reportSubmissionGateway,
@@ -172,18 +172,9 @@ class DataRepository with ChangeNotifier {
   }
 
   void _listenForReports() {
-    _isReportsLoading = true;
-    _reportsError = null;
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-      _reportsSubscription?.cancel();
-      if (user == null) {
-        _reports
-          ..clear()
-          ..addAll(MockData.initialReports);
-        _isReportsLoading = false;
-        notifyListeners();
-      },
-    );
+      _listenForUserReports(user);
+    });
   }
 
   void _listenForUserReports(User? user) {
@@ -250,48 +241,14 @@ class DataRepository with ChangeNotifier {
     return 'Could not load reports. Please try again.';
   }
 
-      _reportsSubscription = FirebaseFirestore.instance
-          .collection('reports')
-          .orderBy('createdAt', descending: true)
-          .limit(500)
-          .snapshots()
-          .listen(
-            (snapshot) {
-              final reports =
-                  snapshot.docs
-                      .map(
-                        (document) => ReportModel.fromMap(
-                          document.data(),
-                          documentId: document.id,
-                        ),
-                      )
-                      .toList()
-                    ..sort((first, second) {
-                      return second.createdAt.compareTo(first.createdAt);
-                    });
-              _reports
-                ..clear()
-                ..addAll(reports);
-              _isReportsLoading = false;
-              _reportsError = null;
-              notifyListeners();
-            },
-            onError: (Object error, StackTrace stackTrace) {
-              _isReportsLoading = false;
-              _reportsError = 'Reports could not be refreshed. Pull to retry.';
-              debugPrint('[AquaTrace] Report sync failed: $error');
-              notifyListeners();
-            },
-          );
-    });
-  }
-
   void retryReportsSync() {
     if (!FirebaseService.isRealFirebase) return;
     _reportsSubscription?.cancel();
     _authSubscription?.cancel();
     _listenForReports();
   }
+
+  void retryReportSync() => retryReportsSync();
 
   @override
   void dispose() {
