@@ -1,6 +1,6 @@
 # AquaTrace — Update Log
 
-## 2026-11-14 23:05:35 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 map integration verification
+## 2026-11-14 23:15:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 map integration verification
 
 ### Completed
 - Re-read all repository Markdown guidance and inspected the map implementation, report model, Firestore subscription, permissions, routing, status enum, and current Git changes. Re-inspected the rendered AquaTrace UI PDF and its extracted map screens/legend.
@@ -16,11 +16,13 @@
 | `flutter analyze` | Pass — no issues found. |
 | `flutter test` | Pass — **49/49**. |
 | `flutter build web --release` | Pass — release web bundle built. |
-| `flutter run -d web-server --release --web-port 5179` | Pass — release app launched; `GET /` and `GET /main.dart.js` both returned HTTP 200. |
+| `flutter run -d web-server --release --web-port 5179`; `flutter run -d chrome --release --web-port 5181` | Both compiled/launched and served the release bundle (`GET /` and `GET /main.dart.js` returned HTTP 200). **Browser rendering did not pass:** headless Edge showed a blank screen at `/` and `/#/map`; no map or login controls appeared. |
+| Headless Edge visual smoke (`http://127.0.0.1:5180/` and `http://127.0.0.1:5181/`) | Blocked — white/blank rendered screenshots after up to 30 seconds; console showed FlutterFire initialization messages but no surfaced page error. |
 | `git diff --check` | Pass. |
 
 ### Remaining work / blockers
 - Authenticated Firebase reads and actual Firestore snapshot updates were not exercised because no authenticated Firebase session or Firestore emulator was available. Repository-driven live marker refresh is covered; the Firestore subscription remains capped at 500 reports and reports query errors for retry.
+- The app's web server/build are responsive, but the release UI remains blank in the available headless browser, including at the app root. This appears to block during shared startup before a screen is rendered; it needs investigation by the app-bootstrap/Firebase owner and is not a map-schema or map-widget failure. Do not treat web launch as visually verified.
 - No Android/iOS device or emulator was available to validate native location prompts/settings or launch the external maps app on-device. Permission-denial/plugin failures and handoff messaging are covered in widget tests.
 - No geocoder is configured; search stays local to the loaded report data. External directions launch does not claim AquaTrace turn-by-turn navigation.
 
