@@ -16,6 +16,7 @@ class ReportModel {
   final String? afterImageUrl;
   final String? assignedTechnicianUid;
   final String? assignedTechnicianName;
+  final DateTime? assignedAt;
   final String assignedArea;
   final bool isEmergency;
   final int verificationCount;
@@ -39,6 +40,7 @@ class ReportModel {
     this.afterImageUrl,
     this.assignedTechnicianUid,
     this.assignedTechnicianName,
+    this.assignedAt,
     this.assignedArea = 'Colombo 03',
     this.isEmergency = false,
     this.verificationCount = 0,
@@ -72,6 +74,7 @@ class ReportModel {
       'afterImageUrl': afterImageUrl,
       'assignedTechnicianUid': assignedTechnicianUid,
       'assignedTechnicianName': assignedTechnicianName,
+      'assignedAt': assignedAt?.toIso8601String(),
       'assignedArea': assignedArea,
       'isEmergency': isEmergency,
       'verificationCount': verificationCount,
@@ -98,6 +101,9 @@ class ReportModel {
       afterImageUrl: map['afterImageUrl'] as String?,
       assignedTechnicianUid: map['assignedTechnicianUid'] as String?,
       assignedTechnicianName: map['assignedTechnicianName'] as String?,
+      assignedAt: map['assignedAt'] != null
+          ? DateTime.tryParse(map['assignedAt'].toString())
+          : null,
       assignedArea: map['assignedArea'] as String? ?? 'Colombo 03',
       isEmergency: map['isEmergency'] as bool? ?? false,
       verificationCount: (map['verificationCount'] as num?)?.toInt() ?? 0,
@@ -135,6 +141,7 @@ class ReportModel {
     String? afterImageUrl,
     String? assignedTechnicianUid,
     String? assignedTechnicianName,
+    DateTime? assignedAt,
     String? assignedArea,
     bool? isEmergency,
     int? verificationCount,
@@ -160,6 +167,7 @@ class ReportModel {
           assignedTechnicianUid ?? this.assignedTechnicianUid,
       assignedTechnicianName:
           assignedTechnicianName ?? this.assignedTechnicianName,
+      assignedAt: assignedAt ?? this.assignedAt,
       assignedArea: assignedArea ?? this.assignedArea,
       isEmergency: isEmergency ?? this.isEmergency,
       verificationCount: verificationCount ?? this.verificationCount,
