@@ -2,12 +2,14 @@ import 'package:aquatrace/core/constants/fault_constants.dart';
 import 'package:aquatrace/core/models/mock_data.dart';
 import 'package:aquatrace/core/models/report_model.dart';
 import 'package:aquatrace/core/services/data_repository.dart';
+import 'package:aquatrace/core/services/report_submission_gateway.dart';
 import 'package:aquatrace/features/map/presentation/shared_map_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -104,6 +106,52 @@ void main() {
       expect(
         find.text('No reports with a valid location to display.'),
         findsOneWidget,
+      );
+      repository.dispose();
+    });
+
+    testWidgets('plots report latitude and longitude in the correct order', (
+      tester,
+    ) async {
+      final report = MockData.initialReports.first;
+      final repository = DataRepository(initialReports: [report]);
+      await _pumpMap(tester, repository);
+
+      expect(
+        _mapMarkers(tester).single.point,
+        LatLng(report.latitude, report.longitude),
+      );
+      repository.dispose();
+    });
+
+    testWidgets('updates markers when repository reports change', (
+      tester,
+    ) async {
+      final repository = DataRepository(
+        initialReports: const [],
+        reportSubmissionGateway: _FakeReportSubmissionGateway(),
+      );
+      await _pumpMap(tester, repository);
+      expect(_mapMarkers(tester), isEmpty);
+
+      final report = MockData.initialReports.first.copyWith(
+        reportId: 'AT-map-live-update',
+        status: FaultStatus.pending,
+        latitude: 6.912345,
+        longitude: 79.812345,
+      );
+      await repository.addReport(
+        report,
+        evidenceBytes: Uint8List.fromList([1]),
+        contentType: 'image/jpeg',
+      );
+      await tester.pump();
+
+      expect(_mapMarkers(tester), hasLength(1));
+      expect(_mapMarkers(tester).single.point, LatLng(6.912345, 79.812345));
+      expect(
+        (_mapMarkers(tester).single.child as Semantics).properties.label,
+        startsWith('Pending'),
       );
       repository.dispose();
     });
@@ -260,6 +308,18 @@ void main() {
       repository.dispose();
     });
   });
+}
+
+class _FakeReportSubmissionGateway implements ReportSubmissionGateway {
+  @override
+  Future<String> uploadEvidence({
+    required ReportModel report,
+    required Uint8List bytes,
+    required String contentType,
+  }) async => 'https://storage.example/evidence.jpg';
+
+  @override
+  Future<void> createReport(ReportModel report) async {}
 }
 
 Future<void> _pumpMap(WidgetTester tester, DataRepository repository) async {

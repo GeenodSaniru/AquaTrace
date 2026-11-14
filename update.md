@@ -1,5 +1,29 @@
 # AquaTrace — Update Log
 
+## 2026-11-14 23:05:35 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 map integration verification
+
+### Completed
+- Re-read all repository Markdown guidance and inspected the map implementation, report model, Firestore subscription, permissions, routing, status enum, and current Git changes. Re-inspected the rendered AquaTrace UI PDF and its extracted map screens/legend.
+- Confirmed the map consumes the shared `/reports` Firestore snapshots (newest 500, ordered by `createdAt`), refreshes from snapshots, plots numeric `latitude`/`longitude`, and filters against all five `FaultStatus` values. No shared schema change was needed; Members 3, 5, and 6 code/contracts were not changed.
+- Added map coverage for coordinate ordering and a repository update appearing as a correctly located pending marker. Updated the technician dashboard copy to clearly identify the directions handoff as an external maps app rather than an in-app ETA/navigation feature.
+- Changed files: `lib/features/technician/presentation/technician_home_view.dart`, `test/map_view_test.dart`, `update.md`.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format test\map_view_test.dart` | Pass — no formatting changes required. |
+| `flutter test test\map_view_test.dart` | Pass — **13/13**, including all five status markers/filtering, latitude/longitude order, live repository update, invalid coordinates, permission handling, and external-directions handoff. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — **49/49**. |
+| `flutter build web --release` | Pass — release web bundle built. |
+| `flutter run -d web-server --release --web-port 5179` | Pass — release app launched; `GET /` and `GET /main.dart.js` both returned HTTP 200. |
+| `git diff --check` | Pass. |
+
+### Remaining work / blockers
+- Authenticated Firebase reads and actual Firestore snapshot updates were not exercised because no authenticated Firebase session or Firestore emulator was available. Repository-driven live marker refresh is covered; the Firestore subscription remains capped at 500 reports and reports query errors for retry.
+- No Android/iOS device or emulator was available to validate native location prompts/settings or launch the external maps app on-device. Permission-denial/plugin failures and handoff messaging are covered in widget tests.
+- No geocoder is configured; search stays local to the loaded report data. External directions launch does not claim AquaTrace turn-by-turn navigation.
+
 ## 2026-11-11 14:54:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 interactive map and location services
 
 ### Completed
