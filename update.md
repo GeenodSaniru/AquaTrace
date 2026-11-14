@@ -1,5 +1,34 @@
 # AquaTrace — Update Log
 
+## 2026-11-14 23:53:10 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 final map regression QA
+
+### Completed
+- Re-read repository Markdown guidance and prior update entries, checked the map implementation/data contract/query/routing/location setup and Git status, and compared the citizen/admin map crops in the AquaTrace UI PDF. The reference confirms the search/filter controls, five-status map legend, colored status markers, zoom controls, and report navigation affordance.
+- Hardened current-location handling: permissions other than `whileInUse`/`always` now stop before requesting a GPS fix, and non-finite/out-of-range device coordinates are rejected rather than plotted.
+- Expanded map regression tests for all five marker status colors and filtering, marker selection/details, latitude/longitude order, missing/malformed/out-of-range coordinates, 500-marker rendering, tile load failure/retry, search, zoom changes, permission denial/blocked/unavailable, disabled location services, GPS timeout/invalid fix, and external directions launch using the selected report coordinates.
+- Firestore query/schema remain unchanged: the shared live `/reports` listener is bounded to 500 most recent records; no extra map-triggered Firestore reads or cross-member schema changes were introduced.
+- Changed files: `lib/features/map/presentation/shared_map_view.dart`, `test/map_view_test.dart`, `update.md`.
+
+### Checks and outcomes
+| Command / exercise | Result |
+|--------------------|--------|
+| `dart format lib\features\map\presentation\shared_map_view.dart test\map_view_test.dart` | Pass — formatted changed files. |
+| `dart format --set-exit-if-changed lib\features\map\presentation\shared_map_view.dart test\map_view_test.dart` | Pass — no changes needed. |
+| `flutter test test\map_view_test.dart` | Pass — **21/21** map tests. |
+| `flutter test` | Pass — **57/57** tests. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter build web --release` | Pass — release bundle built. |
+| `flutter run -d web-server --release --web-port 5188`; HTTP probes of `/` and `/main.dart.js` | Server launched; both endpoints returned HTTP 200. |
+| Headless Edge visual smoke (`http://127.0.0.1:5188/#/map`) | Fail/blocker — page rendered blank; no map controls or login UI appeared, even though server/assets responded. |
+| `curl.exe -I --max-time 15 https://tile.openstreetmap.org/13/1319/3169.png` | OSM endpoint returned `x-blocked: Access denied. See https://operations.osmfoundation.org/policies/tiles/`; tile rendering cannot be verified from this network. |
+| `git diff --check` | Pass. |
+
+### Remaining work / blockers
+- Browser rendering is still blank at the app root/map route in headless Edge; console only showed FlutterFire initialization messages. This is an app-bootstrap/web-runtime blocker outside the map module. The web build and server response are not evidence of a visually functioning browser app.
+- The default public OSM tile request is explicitly blocked by the current network/endpoint response. Do not retry/bypass the policy; configure an approved tile provider using `AQUATRACE_MAP_TILE_URL` and its required attribution for deployment, then smoke-test tiles from an allowed network.
+- No authenticated Firebase session/emulator was available for cloud snapshot verification, and no native device/emulator was available for OS permission prompts or external-app handoff. Unit/widget tests cover repository updates, permission states, invalid inputs, tile retry, and handoff URL generation.
+- No geocoder is configured; search is intentionally limited to loaded report fields.
+
 ## 2026-11-14 23:15:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 4 map integration verification
 
 ### Completed
