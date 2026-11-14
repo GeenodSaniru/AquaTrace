@@ -11,6 +11,13 @@ void main() {
     repository = DataRepository();
   });
 
+  test('supports an empty report repository', () {
+    final emptyRepository = DataRepository(initialReports: const []);
+
+    expect(emptyRepository.reports, isEmpty);
+    expect(emptyRepository.getReportsByStatus(FaultStatus.pending), isEmpty);
+  });
+
   test('rejects report mutations without a role', () async {
     expect(
       () => repository.updateReportStatus(

@@ -33,6 +33,8 @@ class DataRepository with ChangeNotifier {
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
   bool get isReportsLoading => _reportsLoading;
   String? get reportsError => _reportsErrorMessage;
+  bool get reportsLoading => _reportsLoading;
+  String? get reportsErrorMessage => _reportsErrorMessage;
 
   DataRepository({
     ReportSubmissionGateway? reportSubmissionGateway,
@@ -245,6 +247,8 @@ class DataRepository with ChangeNotifier {
     _authSubscription?.cancel();
     _listenForReports();
   }
+
+  void retryReportSync() => retryReportsSync();
 
   @override
   void dispose() {
