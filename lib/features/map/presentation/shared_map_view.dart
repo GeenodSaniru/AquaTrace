@@ -437,6 +437,13 @@ class _SharedMapViewState extends State<SharedMapView> {
         );
         return;
       }
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        _showMessage(
+          'Location permission is unavailable. Check your device or browser settings.',
+        );
+        return;
+      }
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -444,6 +451,15 @@ class _SharedMapViewState extends State<SharedMapView> {
           timeLimit: Duration(seconds: 20),
         ),
       );
+      if (!position.latitude.isFinite ||
+          !position.longitude.isFinite ||
+          position.latitude < -90 ||
+          position.latitude > 90 ||
+          position.longitude < -180 ||
+          position.longitude > 180) {
+        _showMessage('Your device returned an invalid location. Try again.');
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);

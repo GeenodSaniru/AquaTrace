@@ -161,13 +161,13 @@ class TechnicianHomeView extends StatelessWidget {
                         AppPriorityBadge(severity: nextJob.severity),
                         const SizedBox(width: 12),
                         const Icon(
-                          Icons.directions_car_outlined,
+                          Icons.map_outlined,
                           size: 14,
                           color: AppColors.primaryCyan,
                         ),
                         const SizedBox(width: 4),
                         const Text(
-                          '3.4 km · ~12 min ETA',
+                          'Directions via external app',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
