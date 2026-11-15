@@ -178,11 +178,11 @@ class DataRepository with ChangeNotifier {
 
   void _listenForReports() {
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-      _listenForUserReports(user);
+      unawaited(_listenForUserReports(user));
     });
   }
 
-  void _listenForUserReports(User? user) {
+  Future<void> _listenForUserReports(User? user) async {
     _reportsSubscription?.cancel();
     _reportsErrorMessage = null;
     if (user == null) {
@@ -195,40 +195,59 @@ class DataRepository with ChangeNotifier {
     _reportsLoading = true;
     _reports.clear();
     notifyListeners();
-    _reportsSubscription = FirebaseFirestore.instance
-        .collection('reports')
-        .orderBy('createdAt', descending: true)
-        .limit(AppConfig.maximumMapReports)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            final reports = <ReportModel>[];
-            for (final document in snapshot.docs) {
-              try {
-                reports.add(
-                  ReportModel.fromMap(document.data(), documentId: document.id),
-                );
-              } on Object catch (error, stackTrace) {
-                debugPrint(
-                  '[AquaTrace] Skipping invalid report ${document.id}: '
-                  '$error\n$stackTrace',
-                );
-              }
+    try {
+      final userProfile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final role = userProfile.data()?['role'] as String?;
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('reports')
+          .limit(AppConfig.maximumMapReports);
+      if (role == 'technician') {
+        query = query.where('assignedTechnicianUid', isEqualTo: user.uid);
+      } else {
+        query = query.orderBy('createdAt', descending: true);
+      }
+
+      _reportsSubscription = query.snapshots().listen(
+        (snapshot) {
+          final reports = <ReportModel>[];
+          for (final document in snapshot.docs) {
+            try {
+              reports.add(
+                ReportModel.fromMap(document.data(), documentId: document.id),
+              );
+            } on Object catch (error, stackTrace) {
+              debugPrint(
+                '[AquaTrace] Skipping invalid report ${document.id}: '
+                '$error\n$stackTrace',
+              );
             }
-            _reports
-              ..clear()
-              ..addAll(reports);
-            _reportsLoading = false;
-            _reportsErrorMessage = null;
-            notifyListeners();
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            _reportsLoading = false;
-            _reportsErrorMessage = _reportSyncErrorMessage(error);
-            debugPrint('[AquaTrace] Report sync failed: $error\n$stackTrace');
-            notifyListeners();
-          },
-        );
+          }
+          reports.sort(
+            (first, second) => second.createdAt.compareTo(first.createdAt),
+          );
+          _reports
+            ..clear()
+            ..addAll(reports);
+          _reportsLoading = false;
+          _reportsErrorMessage = null;
+          notifyListeners();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          _reportsLoading = false;
+          _reportsErrorMessage = _reportSyncErrorMessage(error);
+          debugPrint('[AquaTrace] Report sync failed: $error\n$stackTrace');
+          notifyListeners();
+        },
+      );
+    } catch (error, stackTrace) {
+      _reportsLoading = false;
+      _reportsErrorMessage = _reportSyncErrorMessage(error);
+      debugPrint('[AquaTrace] Report query setup failed: $error\n$stackTrace');
+      notifyListeners();
+    }
   }
 
   String _reportSyncErrorMessage(Object error) {

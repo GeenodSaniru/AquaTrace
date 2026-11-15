@@ -1,5 +1,30 @@
 # AquaTrace — Update Log
 
+## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
+
+### Completed
+- Changed live report synchronization to load the signed-in technician's jobs with a Firestore `assignedTechnicianUid == auth.uid` query instead of downloading the full report collection and filtering locally.
+- Preserved admin/citizen report synchronization and sorted technician query results by report creation time for stable queue ordering.
+- Added query setup error handling and retained existing retry/error states for offline and permission failures.
+- Tightened Firestore report reads so technicians can read only documents assigned to their own UID.
+- Tightened Firestore technician writes to enforce `assigned -> ongoing -> completed` transitions and require a non-empty after-repair URL for completion.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `firestore.rules`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 70/70. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 2 will add focused integration tests for assignment changes, offline/retry behavior, and failure paths.
+- Firestore rules deployment and live authenticated technician testing remain environment-dependent.
+
 ## 2026-11-15 11:12:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 final technician QA and role gating
 
 ### Completed
