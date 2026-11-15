@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/app_config.dart';
 import '../constants/fault_constants.dart';
 import '../errors/app_exception.dart';
 import '../models/activity_timeline_event.dart';
@@ -12,6 +13,7 @@ import '../models/notification_item.dart';
 import '../models/report_model.dart';
 import 'firebase_service.dart';
 import 'report_submission_gateway.dart';
+import 'technician_job_gateway.dart';
 
 /// Central repository managing reports, activity timelines, and notifications.
 ///
@@ -19,31 +21,49 @@ import 'report_submission_gateway.dart';
 /// and reactive in-memory state during development or demo execution.
 class DataRepository with ChangeNotifier {
   final ReportSubmissionGateway _reportSubmissionGateway;
+  final TechnicianJobGateway _technicianJobGateway;
   final List<ReportModel> _reports = [];
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
   final Set<String> _submissionsInFlight = {};
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
+  bool _reportsLoading = false;
+  String? _reportsErrorMessage;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
   List<NotificationItem> get notifications => List.unmodifiable(_notifications);
+  bool get isReportsLoading => _reportsLoading;
+  String? get reportsError => _reportsErrorMessage;
+  bool get reportsLoading => _reportsLoading;
+  String? get reportsErrorMessage => _reportsErrorMessage;
 
-  DataRepository({ReportSubmissionGateway? reportSubmissionGateway})
-    : _reportSubmissionGateway =
-          reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
-    _initialize();
+  DataRepository({
+    ReportSubmissionGateway? reportSubmissionGateway,
+    @visibleForTesting List<ReportModel>? initialReports,
+    TechnicianJobGateway? technicianJobGateway,
+  }) : _reportSubmissionGateway =
+           reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
+       _technicianJobGateway =
+           technicianJobGateway ?? FirebaseTechnicianJobGateway() {
+    if (initialReports != null) {
+      _reports.addAll(initialReports);
+    } else {
+      _initialize();
+    }
     if (FirebaseService.isRealFirebase) {
       _listenForReports();
     }
   }
 
   void _initialize() {
-    _reports.addAll(MockData.initialReports);
-    _notifications.addAll(MockData.initialNotifications);
-    _reportTimelines['AT-2026-00124'] = List.from(
-      MockData.activityTimelineFor124,
-    );
+    if (!FirebaseService.isRealFirebase) {
+      _reports.addAll(MockData.initialReports);
+      _notifications.addAll(MockData.initialNotifications);
+      _reportTimelines['AT-2026-00124'] = List.from(
+        MockData.activityTimelineFor124,
+      );
+    }
   }
 
   // --- Reports Query & Management ---
@@ -158,43 +178,101 @@ class DataRepository with ChangeNotifier {
 
   void _listenForReports() {
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-      _reportsSubscription?.cancel();
-      if (user == null) {
-        _reports
-          ..clear()
-          ..addAll(MockData.initialReports);
-        notifyListeners();
-        return;
-      }
-
-      _reportsSubscription = FirebaseFirestore.instance
-          .collection('reports')
-          .snapshots()
-          .listen(
-            (snapshot) {
-              final reports =
-                  snapshot.docs
-                      .map(
-                        (document) => ReportModel.fromMap(
-                          document.data(),
-                          documentId: document.id,
-                        ),
-                      )
-                      .toList()
-                    ..sort((first, second) {
-                      return second.createdAt.compareTo(first.createdAt);
-                    });
-              _reports
-                ..clear()
-                ..addAll(reports);
-              notifyListeners();
-            },
-            onError: (Object error, StackTrace stackTrace) {
-              debugPrint('[AquaTrace] Report sync failed: $error');
-            },
-          );
+      unawaited(_listenForUserReports(user));
     });
   }
+
+  Future<void> _listenForUserReports(User? user) async {
+    _reportsSubscription?.cancel();
+    _reportsErrorMessage = null;
+    if (user == null) {
+      _reports.clear();
+      _reportsLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    _reportsLoading = true;
+    _reports.clear();
+    notifyListeners();
+    try {
+      final userProfile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final role = userProfile.data()?['role'] as String?;
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('reports')
+          .limit(AppConfig.maximumMapReports);
+      if (role == 'technician') {
+        query = query.where('assignedTechnicianUid', isEqualTo: user.uid);
+      } else {
+        query = query.orderBy('createdAt', descending: true);
+      }
+
+      _reportsSubscription = query.snapshots().listen(
+        (snapshot) {
+          final reports = <ReportModel>[];
+          for (final document in snapshot.docs) {
+            try {
+              reports.add(
+                ReportModel.fromMap(document.data(), documentId: document.id),
+              );
+            } on Object catch (error, stackTrace) {
+              debugPrint(
+                '[AquaTrace] Skipping invalid report ${document.id}: '
+                '$error\n$stackTrace',
+              );
+            }
+          }
+          reports.sort(
+            (first, second) => second.createdAt.compareTo(first.createdAt),
+          );
+          _reports
+            ..clear()
+            ..addAll(reports);
+          _reportsLoading = false;
+          _reportsErrorMessage = null;
+          notifyListeners();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          _reportsLoading = false;
+          _reportsErrorMessage = _reportSyncErrorMessage(error);
+          debugPrint('[AquaTrace] Report sync failed: $error\n$stackTrace');
+          notifyListeners();
+        },
+      );
+    } catch (error, stackTrace) {
+      _reportsLoading = false;
+      _reportsErrorMessage = _reportSyncErrorMessage(error);
+      debugPrint('[AquaTrace] Report query setup failed: $error\n$stackTrace');
+      notifyListeners();
+    }
+  }
+
+  String _reportSyncErrorMessage(Object error) {
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') {
+        return 'You do not have permission to view reports.';
+      }
+      if (error.code == 'unavailable' || error.code == 'deadline-exceeded') {
+        return 'Could not refresh reports. Check your internet connection.';
+      }
+      if (error.code == 'failed-precondition') {
+        return 'Reports could not be loaded because the Firestore query needs configuration.';
+      }
+    }
+    return 'Could not load reports. Please try again.';
+  }
+
+  void retryReportsSync() {
+    if (!FirebaseService.isRealFirebase) return;
+    _reportsSubscription?.cancel();
+    _authSubscription?.cancel();
+    _listenForReports();
+  }
+
+  void retryReportSync() => retryReportsSync();
 
   @override
   void dispose() {
@@ -210,13 +288,22 @@ class DataRepository with ChangeNotifier {
     required String actorRole,
     String? note,
   }) async {
+    await _requireAuthorizedActor(actorRole);
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
+      final report = _reports[index];
+      _validateStatusTransition(report.status, newStatus, actorRole);
+      final updatedAt = DateTime.now();
       final updated = _reports[index].copyWith(
         status: newStatus,
-        updatedAt: DateTime.now(),
-        repairNotes: note ?? _reports[index].repairNotes,
+        updatedAt: updatedAt,
+        repairNotes: note ?? report.repairNotes,
       );
+      await _persistReportUpdate(reportId, {
+        'status': newStatus.name,
+        'updatedAt': updatedAt.toIso8601String(),
+        ...?note == null ? null : {'repairNotes': note},
+      });
       _reports[index] = updated;
 
       _addTimelineEvent(
@@ -234,19 +321,204 @@ class DataRepository with ChangeNotifier {
     }
   }
 
+  Future<void> updateTechnicianJobStatus({
+    required String reportId,
+    required String technicianUid,
+    required String actorName,
+    required FaultStatus newStatus,
+    String? note,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+
+    final current = _reports[index];
+    if (current.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can update this job.',
+      );
+    }
+    if (!_isValidTechnicianTransition(current.status, newStatus)) {
+      throw const ValidationException(
+        'This job cannot move to the selected status.',
+      );
+    }
+    if (newStatus == FaultStatus.completed &&
+        (current.afterImageUrl == null || current.afterImageUrl!.isEmpty)) {
+      throw const ValidationException(
+        'Add an after-repair photo before completing the job.',
+      );
+    }
+
+    final updated = current.copyWith(
+      status: newStatus,
+      repairNotes: note ?? current.repairNotes,
+      updatedAt: DateTime.now(),
+    );
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      reportId: reportId,
+      title: 'Job ${newStatus.displayName}',
+      description:
+          note ??
+          'Job status changed to ${newStatus.displayName} by $actorName.',
+      actorName: actorName,
+      actorRole: 'Technician',
+      status: newStatus,
+      timestamp: DateTime.now(),
+    );
+
+    if (FirebaseService.isRealFirebase) {
+      await _technicianJobGateway.updateJob(
+        report: updated,
+        activity: activity,
+      );
+    }
+    _reports[index] = updated;
+    _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
+    notifyListeners();
+  }
+
+  Future<void> uploadTechnicianAfterRepairPhoto({
+    required String reportId,
+    required String technicianUid,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+    final report = _reports[index];
+    if (report.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can upload repair evidence.',
+      );
+    }
+    if (report.status != FaultStatus.ongoing) {
+      throw const ValidationException(
+        'Start the job before adding repair evidence.',
+      );
+    }
+    if (!const {
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+    }.contains(contentType)) {
+      throw const ValidationException(
+        'Choose a JPEG, PNG, WebP, or HEIC repair photo.',
+      );
+    }
+
+    if (!FirebaseService.isRealFirebase) {
+      throw const PermissionException(
+        'Demo accounts cannot upload technician evidence.',
+      );
+    }
+    final imageUrl = await _technicianJobGateway.uploadAfterRepairPhoto(
+      report: report,
+      bytes: bytes,
+      contentType: contentType,
+    );
+    final updated = report.copyWith(
+      afterImageUrl: imageUrl,
+      updatedAt: DateTime.now(),
+    );
+    await _technicianJobGateway.updateRepairEvidence(report: updated);
+    _reports[index] = updated;
+    notifyListeners();
+  }
+
+  Future<void> saveTechnicianRepairNotes({
+    required String reportId,
+    required String technicianUid,
+    required String actorName,
+    required String notes,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+    final current = _reports[index];
+    if (current.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can update this job.',
+      );
+    }
+    if (current.status != FaultStatus.ongoing) {
+      throw const ValidationException(
+        'Start the job before adding repair notes.',
+      );
+    }
+    final trimmedNotes = notes.trim();
+    if (trimmedNotes.length < 3 || trimmedNotes.length > 2000) {
+      throw const ValidationException(
+        'Repair notes must be between 3 and 2000 characters.',
+      );
+    }
+
+    final updated = current.copyWith(
+      repairNotes: trimmedNotes,
+      updatedAt: DateTime.now(),
+    );
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      reportId: reportId,
+      title: 'Repair Notes Updated',
+      description: 'Repair notes updated by $actorName.',
+      actorName: actorName,
+      actorRole: 'Technician',
+      status: current.status,
+      timestamp: DateTime.now(),
+    );
+    if (FirebaseService.isRealFirebase) {
+      await _technicianJobGateway.updateJob(
+        report: updated,
+        activity: activity,
+      );
+    }
+    _reports[index] = updated;
+    _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
+    notifyListeners();
+  }
+
+  bool _isValidTechnicianTransition(FaultStatus current, FaultStatus next) {
+    return (current == FaultStatus.assigned && next == FaultStatus.ongoing) ||
+        (current == FaultStatus.ongoing && next == FaultStatus.completed);
+  }
+
   Future<void> assignTechnician({
     required String reportId,
     required String technicianUid,
     required String technicianName,
     required String adminName,
   }) async {
+    await _requireAuthorizedActor('Admin');
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
+      final report = _reports[index];
+      if (report.status != FaultStatus.pending &&
+          report.status != FaultStatus.disputed) {
+        throw const ValidationException(
+          'Only pending or disputed reports can be assigned.',
+        );
+      }
+      final updatedAt = DateTime.now();
+      await _persistReportUpdate(reportId, {
+        'assignedTechnicianUid': technicianUid,
+        'assignedTechnicianName': technicianName,
+        'assignedAt': updatedAt.toIso8601String(),
+        'status': FaultStatus.assigned.name,
+        'updatedAt': updatedAt.toIso8601String(),
+      });
       _reports[index] = _reports[index].copyWith(
         assignedTechnicianUid: technicianUid,
         assignedTechnicianName: technicianName,
+        assignedAt: updatedAt,
         status: FaultStatus.assigned,
-        updatedAt: DateTime.now(),
+        updatedAt: updatedAt,
       );
 
       _addTimelineEvent(
@@ -260,6 +532,86 @@ class DataRepository with ChangeNotifier {
 
       notifyListeners();
     }
+  }
+
+  Future<void> updateReportSeverity({
+    required String reportId,
+    required FaultSeverity severity,
+    required String adminName,
+  }) async {
+    await _requireAuthorizedActor('Admin');
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) return;
+    final updatedAt = DateTime.now();
+    await _persistReportUpdate(reportId, {
+      'severity': severity.name,
+      'updatedAt': updatedAt.toIso8601String(),
+    });
+    _reports[index] = _reports[index].copyWith(
+      severity: severity,
+      updatedAt: updatedAt,
+    );
+    _addTimelineEvent(
+      reportId: reportId,
+      title: 'Priority Updated',
+      description: 'Priority set to ${severity.displayName} by $adminName.',
+      actorName: adminName,
+      actorRole: 'Admin',
+      status: _reports[index].status,
+    );
+    notifyListeners();
+  }
+
+  Future<void> _requireAuthorizedActor(String actorRole) async {
+    if (actorRole.trim().toLowerCase() == 'admin' &&
+        FirebaseService.isRealFirebase) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        throw const PermissionException('Sign in as an administrator first.');
+      }
+      final user = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (user.data()?['role'] != 'admin') {
+        throw const PermissionException('Administrator access is required.');
+      }
+    } else if (actorRole.trim().isEmpty) {
+      throw const PermissionException('A signed-in role is required.');
+    }
+  }
+
+  void _validateStatusTransition(
+    FaultStatus current,
+    FaultStatus next,
+    String actorRole,
+  ) {
+    if (current == next) return;
+    final allowed = switch (actorRole.trim().toLowerCase()) {
+      'admin' =>
+        current == FaultStatus.pending && next == FaultStatus.assigned ||
+            current == FaultStatus.disputed && next == FaultStatus.assigned,
+      'technician' =>
+        (current == FaultStatus.assigned && next == FaultStatus.ongoing) ||
+            (current == FaultStatus.ongoing && next == FaultStatus.completed),
+      _ => false,
+    };
+    if (!allowed) {
+      throw ValidationException(
+        'Cannot change ${current.displayName} to ${next.displayName}.',
+      );
+    }
+  }
+
+  Future<void> _persistReportUpdate(
+    String reportId,
+    Map<String, dynamic> changes,
+  ) async {
+    if (!FirebaseService.isRealFirebase) return;
+    await FirebaseFirestore.instance
+        .collection('reports')
+        .doc(reportId)
+        .update(changes);
   }
 
   // --- Activity History ---
@@ -289,6 +641,18 @@ class DataRepository with ChangeNotifier {
         timestamp: DateTime.now(),
       ),
     );
+    if (FirebaseService.isRealFirebase) {
+      final event = list.last;
+      FirebaseFirestore.instance
+          .collection('reports')
+          .doc(reportId)
+          .collection('activity')
+          .doc(event.id)
+          .set(event.toMap())
+          .catchError((error) {
+            debugPrint('[AquaTrace] Activity write failed: $error');
+          });
+    }
   }
 
   // --- Notifications ---

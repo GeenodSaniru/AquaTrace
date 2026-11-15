@@ -202,8 +202,11 @@ service cloud.firestore {
     // --------------------------------------------------------------------------
 
     match /reports/{reportId} {
-      // Map + community verification require authenticated read of reports.
-      allow read: if isSignedIn();
+      // Technicians can only read jobs assigned to their own Firebase uid.
+      // Citizens read community reports; admins read the full dispatch queue.
+      allow read: if isAdmin()
+        || isCitizen()
+        || isAssignedTechnician(resource.data);
 
       // Citizens (or any signed-in user with citizen profile) create pending reports
       // about themselves only. Assignment / verification counters start empty.
@@ -248,6 +251,7 @@ service cloud.firestore {
           && unchanged('createdAt')
           && unchanged('assignedTechnicianUid')
           && unchanged('assignedTechnicianName')
+          && unchanged('assignedAt')
           && unchanged('verificationCount')
           && unchanged('disputeCount')
           && unchanged('afterImageUrl')
@@ -280,7 +284,22 @@ service cloud.firestore {
           && unchanged('beforeImageUrl')
           && unchanged('latitude')
           && unchanged('longitude')
-          && request.resource.data.status in ['assigned', 'ongoing', 'completed']
+          && (
+            (
+              resource.data.status == 'assigned'
+              && request.resource.data.status == 'ongoing'
+            )
+            || (
+              resource.data.status == 'ongoing'
+              && request.resource.data.status == 'ongoing'
+            )
+            || (
+              resource.data.status == 'ongoing'
+              && request.resource.data.status == 'completed'
+              && request.resource.data.afterImageUrl is string
+              && request.resource.data.afterImageUrl.size() > 0
+            )
+          )
           && onlyChanging([
             'status',
             'afterImageUrl',
@@ -296,11 +315,27 @@ service cloud.firestore {
           && unchanged('createdAt')
           && validFaultStatus(request.resource.data.status)
           && validSeverity(request.resource.data.severity)
+          && (
+            request.resource.data.status == resource.data.status
+            || (
+              resource.data.status in ['pending', 'disputed']
+              && request.resource.data.status == 'assigned'
+            )
+          )
           // Counters still not directly forged by admin clients in bulk;
           // admins may set disputed/completed via workflow, but counts stay
           // function-owned unless explicitly included by a later admin tool.
           && unchanged('verificationCount')
-          && unchanged('disputeCount');
+          && unchanged('disputeCount')
+          && onlyChanging([
+            'status',
+            'severity',
+            'assignedTechnicianUid',
+            'assignedTechnicianName',
+            'assignedAt',
+            'updatedAt',
+            'repairNotes'
+          ]);
       }
 
       // ------------------------------------------------------------------------

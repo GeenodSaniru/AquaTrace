@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/fault_constants.dart';
+import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
@@ -12,10 +13,11 @@ import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_report_card_tile.dart';
 import '../../../core/widgets/app_status_badge.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'technician_job_detail_screen.dart';
 
 /// Technician dashboard view conforming to the AquaTrace design specifications.
 class TechnicianHomeView extends StatelessWidget {
-  final Function(int)? onNavigateTab;
+  final void Function(int, [ReportModel?])? onNavigateTab;
 
   const TechnicianHomeView({super.key, this.onNavigateTab});
 
@@ -160,13 +162,13 @@ class TechnicianHomeView extends StatelessWidget {
                         AppPriorityBadge(severity: nextJob.severity),
                         const SizedBox(width: 12),
                         const Icon(
-                          Icons.directions_car_outlined,
+                          Icons.map_outlined,
                           size: 14,
                           color: AppColors.primaryCyan,
                         ),
                         const SizedBox(width: 4),
                         const Text(
-                          '3.4 km · ~12 min ETA',
+                          'Directions via external app',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -180,7 +182,7 @@ class TechnicianHomeView extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
-                              _showJobDetailModal(context, nextJob);
+                              _openJobDetails(context, nextJob);
                             },
                             child: const Text('View Job'),
                           ),
@@ -190,7 +192,7 @@ class TechnicianHomeView extends StatelessWidget {
                           child: AppButton(
                             label: 'Navigate',
                             icon: Icons.navigation_rounded,
-                            onPressed: () => onNavigateTab?.call(2),
+                            onPressed: () => onNavigateTab?.call(2, nextJob),
                           ),
                         ),
                       ],
@@ -234,7 +236,7 @@ class TechnicianHomeView extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10.0),
                 child: AppReportCardTile(
                   report: job,
-                  onTap: () => _showJobDetailModal(context, job),
+                  onTap: () => _openJobDetails(context, job),
                 ),
               ),
             ),
@@ -244,58 +246,15 @@ class TechnicianHomeView extends StatelessWidget {
     );
   }
 
-  void _showJobDetailModal(BuildContext context, dynamic job) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Job ${job.reportId}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${job.faultType.displayName} · ${job.address}',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              job.description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.lightTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Technician job workflow (accepting, ongoing repair, and after-repair photo upload) is assigned to Member 6.',
-              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 16),
-            AppButton(label: 'Close', onPressed: () => Navigator.of(ctx).pop()),
-          ],
+  void _openJobDetails(BuildContext context, ReportModel job) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TechnicianJobDetailScreen(
+          report: job,
+          onNavigate: () {
+            Navigator.of(context).pop();
+            onNavigateTab?.call(2);
+          },
         ),
       ),
     );

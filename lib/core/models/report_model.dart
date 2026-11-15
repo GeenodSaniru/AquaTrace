@@ -16,6 +16,7 @@ class ReportModel {
   final String? afterImageUrl;
   final String? assignedTechnicianUid;
   final String? assignedTechnicianName;
+  final DateTime? assignedAt;
   final String assignedArea;
   final bool isEmergency;
   final int verificationCount;
@@ -39,6 +40,7 @@ class ReportModel {
     this.afterImageUrl,
     this.assignedTechnicianUid,
     this.assignedTechnicianName,
+    this.assignedAt,
     this.assignedArea = 'Colombo 03',
     this.isEmergency = false,
     this.verificationCount = 0,
@@ -47,6 +49,14 @@ class ReportModel {
     required this.createdAt,
     this.updatedAt,
   });
+
+  bool get hasValidLocation =>
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
 
   Map<String, dynamic> toMap() {
     return {
@@ -64,6 +74,7 @@ class ReportModel {
       'afterImageUrl': afterImageUrl,
       'assignedTechnicianUid': assignedTechnicianUid,
       'assignedTechnicianName': assignedTechnicianName,
+      'assignedAt': assignedAt?.toIso8601String(),
       'assignedArea': assignedArea,
       'isEmergency': isEmergency,
       'verificationCount': verificationCount,
@@ -83,13 +94,16 @@ class ReportModel {
       description: map['description'] as String? ?? '',
       severity: FaultSeverity.fromString(map['severity'] as String?),
       status: FaultStatus.fromString(map['status'] as String?),
-      latitude: (map['latitude'] as num?)?.toDouble() ?? 6.9271,
-      longitude: (map['longitude'] as num?)?.toDouble() ?? 79.8612,
+      latitude: _coordinateFromMap(map['latitude'], -90, 90),
+      longitude: _coordinateFromMap(map['longitude'], -180, 180),
       address: map['address'] as String? ?? 'Colombo',
       beforeImageUrl: map['beforeImageUrl'] as String?,
       afterImageUrl: map['afterImageUrl'] as String?,
       assignedTechnicianUid: map['assignedTechnicianUid'] as String?,
       assignedTechnicianName: map['assignedTechnicianName'] as String?,
+      assignedAt: map['assignedAt'] != null
+          ? DateTime.tryParse(map['assignedAt'].toString())
+          : null,
       assignedArea: map['assignedArea'] as String? ?? 'Colombo 03',
       isEmergency: map['isEmergency'] as bool? ?? false,
       verificationCount: (map['verificationCount'] as num?)?.toInt() ?? 0,
@@ -102,6 +116,14 @@ class ReportModel {
           ? DateTime.tryParse(map['updatedAt'].toString())
           : null,
     );
+  }
+
+  static double _coordinateFromMap(dynamic value, double min, double max) {
+    if (value is! num) return double.nan;
+    final coordinate = value.toDouble();
+    return coordinate.isFinite && coordinate >= min && coordinate <= max
+        ? coordinate
+        : double.nan;
   }
 
   ReportModel copyWith({
@@ -119,6 +141,7 @@ class ReportModel {
     String? afterImageUrl,
     String? assignedTechnicianUid,
     String? assignedTechnicianName,
+    DateTime? assignedAt,
     String? assignedArea,
     bool? isEmergency,
     int? verificationCount,
@@ -144,6 +167,7 @@ class ReportModel {
           assignedTechnicianUid ?? this.assignedTechnicianUid,
       assignedTechnicianName:
           assignedTechnicianName ?? this.assignedTechnicianName,
+      assignedAt: assignedAt ?? this.assignedAt,
       assignedArea: assignedArea ?? this.assignedArea,
       isEmergency: isEmergency ?? this.isEmergency,
       verificationCount: verificationCount ?? this.verificationCount,
