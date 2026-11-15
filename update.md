@@ -1,5 +1,33 @@
 # AquaTrace — Update Log
 
+## 2026-11-15 10:51:18 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician job actions and repair evidence
+
+### Completed
+- Added technician-only `Accept & Start Job` and `Mark Job Completed` actions with the enforced assigned-to-technician transition path.
+- Added repair-note editing with validation and append-only activity history.
+- Added gallery-based after-repair photo selection, image validation, Firebase Storage upload, and immediate report persistence.
+- Completion remains disabled until after-repair evidence is uploaded.
+- Added explicit loading, success, cancellation, and user-facing error states.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/core/services/technician_job_gateway.dart`
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/technician_job_gateway.dart lib/core/services/data_repository.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — all tests passed. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Outstanding
+- Live Firebase Storage/Firestore upload and permission behavior still requires a configured authenticated technician account.
+- Physical camera/GPS/device permission behavior was not available in this environment; the implementation uses the existing `image_picker` platform integration.
+
 ## 2026-11-15 10:31:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician dashboard and job details
 
 ### Completed

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/fault_constants.dart';
+import '../../../core/errors/error_handler.dart';
 import '../../../core/models/report_model.dart';
+import '../../../core/services/data_repository.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_status_badge.dart';
+import '../../auth/providers/auth_provider.dart';
 
-class TechnicianJobDetailScreen extends StatelessWidget {
+class TechnicianJobDetailScreen extends StatefulWidget {
   final ReportModel report;
   final VoidCallback? onNavigate;
 
@@ -16,6 +23,31 @@ class TechnicianJobDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<TechnicianJobDetailScreen> createState() =>
+      _TechnicianJobDetailScreenState();
+}
+
+class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
+  late ReportModel _report;
+  late final TextEditingController _notesController;
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isSaving = false;
+  bool _isPickingPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _report = widget.report;
+    _notesController = TextEditingController(text: _report.repairNotes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -24,11 +56,11 @@ class TechnicianJobDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Job Details'),
         actions: [
-          if (onNavigate != null)
+          if (widget.onNavigate != null)
             IconButton(
               tooltip: 'Open map',
               icon: const Icon(Icons.navigation_rounded),
-              onPressed: onNavigate,
+              onPressed: widget.onNavigate,
             ),
         ],
       ),
@@ -39,18 +71,18 @@ class TechnicianJobDetailScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                report.reportId,
+                _report.reportId,
                 style: const TextStyle(
                   color: AppColors.primaryCyan,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              AppStatusBadge(status: report.status),
+              AppStatusBadge(status: _report.status),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            report.faultType.displayName,
+            _report.faultType.displayName,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -58,9 +90,9 @@ class TechnicianJobDetailScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              AppPriorityBadge(severity: report.severity),
+              AppPriorityBadge(severity: _report.severity),
               const SizedBox(width: 10),
-              if (report.isEmergency)
+              if (_report.isEmergency)
                 const Chip(
                   avatar: Icon(Icons.warning_amber_rounded, size: 16),
                   label: Text('Emergency'),
@@ -75,27 +107,27 @@ class TechnicianJobDetailScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  report.address,
+                  _report.address,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${report.latitude.toStringAsFixed(5)}, '
-                  '${report.longitude.toStringAsFixed(5)}',
+                  '${_report.latitude.toStringAsFixed(5)}, '
+                  '${_report.longitude.toStringAsFixed(5)}',
                   style: TextStyle(
                     color: isDark
                         ? AppColors.darkTextSecondary
                         : AppColors.lightTextSecondary,
                   ),
                 ),
-                if (onNavigate != null) ...[
+                if (widget.onNavigate != null) ...[
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: onNavigate,
+                      onPressed: widget.onNavigate,
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('Open in map'),
                     ),
@@ -108,21 +140,23 @@ class TechnicianJobDetailScreen extends StatelessWidget {
           _DetailCard(
             title: 'Fault description',
             icon: Icons.description_outlined,
-            child: Text(report.description),
+            child: Text(_report.description),
           ),
           const SizedBox(height: 14),
           _EvidenceCard(
             title: 'Before-repair evidence',
-            imageUrl: report.beforeImageUrl,
+            imageUrl: _report.beforeImageUrl,
           ),
-          if (report.afterImageUrl != null &&
-              report.afterImageUrl!.isNotEmpty) ...[
+          if (_report.afterImageUrl != null &&
+              _report.afterImageUrl!.isNotEmpty) ...[
             const SizedBox(height: 14),
             _EvidenceCard(
               title: 'After-repair evidence',
-              imageUrl: report.afterImageUrl,
+              imageUrl: _report.afterImageUrl,
             ),
           ],
+          const SizedBox(height: 14),
+          _buildActionCard(context),
           const SizedBox(height: 14),
           _DetailCard(
             title: 'Job history',
@@ -132,18 +166,18 @@ class TechnicianJobDetailScreen extends StatelessWidget {
               children: [
                 _HistoryRow(
                   label: 'Reported',
-                  value: _formatDate(report.createdAt),
+                  value: _formatDate(_report.createdAt),
                 ),
-                if (report.updatedAt != null)
+                if (_report.updatedAt != null)
                   _HistoryRow(
                     label: 'Last updated',
-                    value: _formatDate(report.updatedAt!),
+                    value: _formatDate(_report.updatedAt!),
                   ),
-                if (report.repairNotes != null &&
-                    report.repairNotes!.trim().isNotEmpty)
+                if (_report.repairNotes != null &&
+                    _report.repairNotes!.trim().isNotEmpty)
                   _HistoryRow(
                     label: 'Repair notes',
-                    value: report.repairNotes!,
+                    value: _report.repairNotes!,
                   ),
               ],
             ),
@@ -151,6 +185,189 @@ class TechnicianJobDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildActionCard(BuildContext context) {
+    final isAssigned = _report.status == FaultStatus.assigned;
+    final isOngoing = _report.status == FaultStatus.ongoing;
+    if (!isAssigned && !isOngoing) {
+      return const SizedBox.shrink();
+    }
+
+    return _DetailCard(
+      title: 'Technician actions',
+      icon: Icons.build_circle_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isAssigned)
+            AppButton(
+              label: 'Accept & Start Job',
+              icon: Icons.play_arrow_rounded,
+              isLoading: _isSaving,
+              onPressed: _startJob,
+            ),
+          if (isOngoing) ...[
+            TextField(
+              controller: _notesController,
+              maxLines: 4,
+              maxLength: 2000,
+              decoration: const InputDecoration(
+                labelText: 'Repair notes',
+                hintText: 'Describe the repair work and materials used.',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _saveNotes,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save repair notes'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _isPickingPhoto || _isSaving ? null : _pickAfterPhoto,
+              icon: _isPickingPhoto
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_a_photo_outlined),
+              label: Text(
+                _report.afterImageUrl == null
+                    ? 'Upload after-repair photo'
+                    : 'Replace after-repair photo',
+              ),
+            ),
+            const SizedBox(height: 10),
+            AppButton(
+              label: 'Mark Job Completed',
+              icon: Icons.check_circle_outline_rounded,
+              isLoading: _isSaving,
+              onPressed: _report.afterImageUrl == null ? null : _completeJob,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startJob() async {
+    await _runAction(() async {
+      await _updateStatus(FaultStatus.ongoing);
+    });
+  }
+
+  Future<void> _completeJob() async {
+    await _runAction(() async {
+      await _updateStatus(
+        FaultStatus.completed,
+        note: _notesController.text.trim(),
+      );
+    });
+  }
+
+  Future<void> _saveNotes() async {
+    await _runAction(() async {
+      final auth = context.read<AuthProvider>().currentUser;
+      await context.read<DataRepository>().saveTechnicianRepairNotes(
+        reportId: _report.reportId,
+        technicianUid: auth?.uid ?? '',
+        actorName: auth?.displayName ?? 'Technician',
+        notes: _notesController.text,
+      );
+      _refreshReport();
+    });
+  }
+
+  Future<void> _updateStatus(FaultStatus status, {String? note}) async {
+    final auth = context.read<AuthProvider>().currentUser;
+    await context.read<DataRepository>().updateTechnicianJobStatus(
+      reportId: _report.reportId,
+      technicianUid: auth?.uid ?? '',
+      actorName: auth?.displayName ?? 'Technician',
+      newStatus: status,
+      note: note,
+    );
+    _refreshReport();
+  }
+
+  Future<void> _pickAfterPhoto() async {
+    setState(() => _isPickingPhoto = true);
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2400,
+        imageQuality: 88,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      final contentType = _contentTypeFor(image.name);
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>().currentUser;
+      final repository = context.read<DataRepository>();
+      await repository.uploadTechnicianAfterRepairPhoto(
+        reportId: _report.reportId,
+        technicianUid: auth?.uid ?? '',
+        bytes: bytes,
+        contentType: contentType,
+      );
+      _refreshReport();
+      if (mounted) _showMessage('After-repair photo uploaded.');
+    } catch (error, stackTrace) {
+      ErrorHandler.logError(error, stackTrace);
+      _showMessage(ErrorHandler.getUserMessage(error), isError: true);
+    } finally {
+      if (mounted) setState(() => _isPickingPhoto = false);
+    }
+  }
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      await action();
+      if (mounted) _showMessage('Job updated.');
+    } catch (error, stackTrace) {
+      ErrorHandler.logError(error, stackTrace);
+      if (mounted) {
+        _showMessage(ErrorHandler.getUserMessage(error), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _refreshReport() {
+    final current = context.read<DataRepository>().getReportById(
+      _report.reportId,
+    );
+    if (current != null && mounted) {
+      setState(() => _report = current);
+    }
+  }
+
+  String _contentTypeFor(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    return switch (extension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'heic' => 'image/heic',
+      _ => 'image/jpeg',
+    };
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+        ),
+      );
   }
 
   String _formatDate(DateTime value) {

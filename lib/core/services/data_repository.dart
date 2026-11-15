@@ -403,10 +403,65 @@ class DataRepository with ChangeNotifier {
       bytes: bytes,
       contentType: contentType,
     );
-    _reports[index] = report.copyWith(
+    final updated = report.copyWith(
       afterImageUrl: imageUrl,
       updatedAt: DateTime.now(),
     );
+    await _technicianJobGateway.updateRepairEvidence(report: updated);
+    _reports[index] = updated;
+    notifyListeners();
+  }
+
+  Future<void> saveTechnicianRepairNotes({
+    required String reportId,
+    required String technicianUid,
+    required String actorName,
+    required String notes,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+    final current = _reports[index];
+    if (current.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can update this job.',
+      );
+    }
+    if (current.status != FaultStatus.ongoing) {
+      throw const ValidationException(
+        'Start the job before adding repair notes.',
+      );
+    }
+    final trimmedNotes = notes.trim();
+    if (trimmedNotes.length < 3 || trimmedNotes.length > 2000) {
+      throw const ValidationException(
+        'Repair notes must be between 3 and 2000 characters.',
+      );
+    }
+
+    final updated = current.copyWith(
+      repairNotes: trimmedNotes,
+      updatedAt: DateTime.now(),
+    );
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      reportId: reportId,
+      title: 'Repair Notes Updated',
+      description: 'Repair notes updated by $actorName.',
+      actorName: actorName,
+      actorRole: 'Technician',
+      status: current.status,
+      timestamp: DateTime.now(),
+    );
+    if (FirebaseService.isRealFirebase) {
+      await _technicianJobGateway.updateJob(
+        report: updated,
+        activity: activity,
+      );
+    }
+    _reports[index] = updated;
+    _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
     notifyListeners();
   }
 
