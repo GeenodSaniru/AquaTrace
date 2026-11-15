@@ -1,6 +1,113 @@
 # AquaTrace — Update Log
 
-<<<<<<< Updated upstream
+## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
+
+### Completed
+- Changed live report synchronization to load the signed-in technician's jobs with a Firestore `assignedTechnicianUid == auth.uid` query instead of downloading the full report collection and filtering locally.
+- Preserved admin/citizen report synchronization and sorted technician query results by report creation time for stable queue ordering.
+- Added query setup error handling and retained existing retry/error states for offline and permission failures.
+- Tightened Firestore report reads so technicians can read only documents assigned to their own UID.
+- Tightened Firestore technician writes to enforce `assigned -> ongoing -> completed` transitions and require a non-empty after-repair URL for completion.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `firestore.rules`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 70/70. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 2 will add focused integration tests for assignment changes, offline/retry behavior, and failure paths.
+- Firestore rules deployment and live authenticated technician testing remain environment-dependent.
+
+## 2026-11-15 11:12:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 final technician QA and role gating
+
+### Completed
+- Restricted technician Reports and Map tabs to jobs assigned to the authenticated technician.
+- Preserved standalone shared Map/Reports test usage when no `AuthProvider` is present.
+- Added technician workflow regression tests for assigned queue filtering, ownership checks, valid start transitions, invalid skips, and completion-photo enforcement.
+- Verified no unresolved merge-conflict markers remain in Dart or Markdown files.
+
+### Files changed
+- `lib/features/reports/presentation/shared_reports_view.dart`
+- `lib/features/map/presentation/shared_map_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/reports/presentation/shared_reports_view.dart lib/features/map/presentation/shared_map_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 5/5. |
+| `flutter test` | Pass — 71/71. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Remaining blockers
+- Live Firebase Storage/Firestore permissions and photo upload require a configured authenticated technician account.
+- Physical device picker/permission behavior was not available in this environment.
+
+## 2026-11-15 10:51:18 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician job actions and repair evidence
+
+### Completed
+- Added technician-only `Accept & Start Job` and `Mark Job Completed` actions with the enforced assigned-to-technician transition path.
+- Added repair-note editing with validation and append-only activity history.
+- Added gallery-based after-repair photo selection, image validation, Firebase Storage upload, and immediate report persistence.
+- Completion remains disabled until after-repair evidence is uploaded.
+- Added explicit loading, success, cancellation, and user-facing error states.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/core/services/technician_job_gateway.dart`
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/technician_job_gateway.dart lib/core/services/data_repository.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — all tests passed. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Outstanding
+- Live Firebase Storage/Firestore upload and permission behavior still requires a configured authenticated technician account.
+- Physical camera/GPS/device permission behavior was not available in this environment; the implementation uses the existing `image_picker` platform integration.
+
+## 2026-11-15 10:31:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician dashboard and job details
+
+### Completed
+- Replaced the technician placeholder job modal with a dedicated job-detail screen.
+- Added job location/address, coordinates, severity, emergency flag, description, evidence previews, repair notes, and history details.
+- Preserved the assigned-only queue and dashboard counts.
+- Added map handoff from the job detail screen and dashboard navigation action.
+- Resolved a pre-existing merge-conflict marker in `DataRepository` while retaining the testing constructor and technician gateway support.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `lib/core/services/data_repository.dart`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — all tests passed. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Status controls, repair-note editing, and after-repair photo picker/upload are planned for Section 3.
+- `macos/Flutter/GeneratedPluginRegistrant.swift` remains an unrelated existing worktree modification and is not part of this section.
+
 ## 2026-11-14 22:15:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 final admin QA and map compatibility repair
 
 ### Completed
@@ -10,7 +117,6 @@
 - Added empty-repository regression coverage while preserving unauthorized-role, invalid-transition, correction, assignment, and assignment-time tests.
 - Confirmed client role gates are backed by repository Firebase role verification and Firestore rules; technician/admin/citizen modules continue to use the shared report/activity contracts without direct rewrites.
 - Re-inspected the visible one-page Figma contact sheet. Admin dashboard, report review/detail, assignment, and activity-style screens match the implemented workflow surfaces.
-=======
 ## 2026-11-15 09:54:47 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician workflow foundation
 
 ### Completed
@@ -22,12 +128,10 @@
 - `lib/core/services/data_repository.dart`
 - `lib/core/services/technician_job_gateway.dart`
 - `storage.rules`
->>>>>>> Stashed changes
 
 ### Checks
 | Command | Result |
 |---------|--------|
-<<<<<<< Updated upstream
 | `dart format lib/core/services/data_repository.dart test/admin_workflow_test.dart` | Pass; no formatting changes required. |
 | Workspace diagnostics (`get_errors`) | No errors in repository, map compatibility surface, admin dashboard/review, or admin workflow tests. |
 | `flutter analyze --no-pub` | Invoked; local Flutter runner did not return a completion line. Focused diagnostics are clean. |
@@ -251,7 +355,6 @@
 ### Git
 - 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
 - The initial push attempt was rejected, then completed after Git Credential Manager browser authentication. `git ls-remote origin refs/heads/sasundi` verified the branch at `5f155f1fd6ecbe85af2f98533a3c910ac992f594` on 2026-11-09.
-=======
 | `dart format lib/core/services/data_repository.dart lib/core/services/technician_job_gateway.dart` | Pass |
 | `flutter analyze` | Pass for Dart code; existing warning: configured `assets/icons/` directory is missing. |
 | `flutter test` | Pass — 23/23. |
@@ -279,7 +382,6 @@
 - Preflight inspection only; no code behavior changed in this section.
 - Git history/status inspected before implementation.
 
->>>>>>> Stashed changes
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed

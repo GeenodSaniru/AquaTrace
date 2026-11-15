@@ -10,6 +10,8 @@ import '../models/report_model.dart';
 import 'firebase_service.dart';
 
 abstract interface class TechnicianJobGateway {
+  Future<void> updateRepairEvidence({required ReportModel report});
+
   Future<void> updateJob({
     required ReportModel report,
     required ActivityTimelineEvent activity,
@@ -23,6 +25,18 @@ abstract interface class TechnicianJobGateway {
 }
 
 class FirebaseTechnicianJobGateway implements TechnicianJobGateway {
+  @override
+  Future<void> updateRepairEvidence({required ReportModel report}) async {
+    _requireTechnician(report.assignedTechnicianUid);
+    await FirebaseFirestore.instance
+        .collection('reports')
+        .doc(report.reportId)
+        .update({
+          'afterImageUrl': report.afterImageUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+  }
+
   @override
   Future<void> updateJob({
     required ReportModel report,

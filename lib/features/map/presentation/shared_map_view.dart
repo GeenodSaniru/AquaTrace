@@ -11,11 +11,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_roles.dart';
 import '../../../core/constants/fault_constants.dart';
 import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_status_badge.dart';
+import '../../auth/providers/auth_provider.dart';
 
 /// Shared citizen, technician, and admin OpenStreetMap fault map.
 class SharedMapView extends StatefulWidget {
@@ -72,12 +74,18 @@ class _SharedMapViewState extends State<SharedMapView> {
   @override
   Widget build(BuildContext context) {
     final repository = context.watch<DataRepository>();
+    final authProvider = context.watch<AuthProvider?>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final reportsWithLocations = repository.reports
+    final reports = authProvider?.currentRole == UserRole.technician
+        ? repository.getReportsForTechnician(
+            authProvider?.currentUser?.uid ?? '',
+          )
+        : repository.reports;
+    final reportsWithLocations = reports
         .where((report) => report.hasValidLocation)
         .toList(growable: false);
     final reportsWithoutLocations =
-        repository.reports.length - reportsWithLocations.length;
+        reports.length - reportsWithLocations.length;
     final visibleReports = reportsWithLocations
         .where((report) {
           final matchesStatus =
@@ -331,7 +339,7 @@ class _SharedMapViewState extends State<SharedMapView> {
             Center(
               child: _MapMessage(
                 icon: Icons.location_off_outlined,
-                message: repository.reports.isEmpty
+                message: reports.isEmpty
                     ? 'No fault reports yet.'
                     : reportsWithLocations.isEmpty
                     ? 'No reports with a valid location to display.'
