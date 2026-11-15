@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/fault_constants.dart';
+import '../../../core/constants/app_roles.dart';
 import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
@@ -11,6 +12,7 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_report_card_tile.dart';
 import '../../../core/widgets/app_status_badge.dart';
+import '../../auth/providers/auth_provider.dart';
 
 /// Reports listing screen with status filtering tabs matching the AquaTrace Figma UI.
 class SharedReportsView extends StatefulWidget {
@@ -46,6 +48,10 @@ class _SharedReportsViewState extends State<SharedReportsView>
   @override
   Widget build(BuildContext context) {
     final dataRepo = Provider.of<DataRepository>(context);
+    final authProvider = context.watch<AuthProvider?>();
+    final visibleReports = authProvider?.currentRole == UserRole.technician
+        ? dataRepo.getReportsForTechnician(authProvider?.currentUser?.uid ?? '')
+        : dataRepo.reports;
 
     return Scaffold(
       appBar: AppBar(
@@ -66,7 +72,7 @@ class _SharedReportsViewState extends State<SharedReportsView>
       body: TabBarView(
         controller: _tabController,
         children: _tabs.map((tab) {
-          final reports = _filterReports(dataRepo.reports, tab);
+          final reports = _filterReports(visibleReports, tab);
           if (reports.isEmpty) {
             return AppEmptyState(
               title: 'No $tab Reports',

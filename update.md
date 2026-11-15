@@ -1,5 +1,34 @@
 # AquaTrace — Update Log
 
+## 2026-11-15 11:12:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 final technician QA and role gating
+
+### Completed
+- Restricted technician Reports and Map tabs to jobs assigned to the authenticated technician.
+- Preserved standalone shared Map/Reports test usage when no `AuthProvider` is present.
+- Added technician workflow regression tests for assigned queue filtering, ownership checks, valid start transitions, invalid skips, and completion-photo enforcement.
+- Verified no unresolved merge-conflict markers remain in Dart or Markdown files.
+
+### Files changed
+- `lib/features/reports/presentation/shared_reports_view.dart`
+- `lib/features/map/presentation/shared_map_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/reports/presentation/shared_reports_view.dart lib/features/map/presentation/shared_map_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 5/5. |
+| `flutter test` | Pass — 71/71. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Remaining blockers
+- Live Firebase Storage/Firestore permissions and photo upload require a configured authenticated technician account.
+- Physical device picker/permission behavior was not available in this environment.
+
 ## 2026-11-15 10:51:18 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician job actions and repair evidence
 
 ### Completed
