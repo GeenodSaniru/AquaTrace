@@ -15,10 +15,21 @@ class AppConfig {
   static const double defaultZoom = 13.0;
 
   /// OpenStreetMap tile server configuration
-  static const String osmTileUrl =
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const String osmTileUrl = String.fromEnvironment(
+    'AQUATRACE_MAP_TILE_URL',
+    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+  static const String mapTileAttribution = String.fromEnvironment(
+    'AQUATRACE_MAP_TILE_ATTRIBUTION',
+    defaultValue: 'OpenStreetMap contributors',
+  );
+  static const String mapTileAttributionUrl = String.fromEnvironment(
+    'AQUATRACE_MAP_ATTRIBUTION_URL',
+    defaultValue: 'https://www.openstreetmap.org/copyright',
+  );
   static const String osmUserAgent =
       'com.aquatrace.app/1.0.0 (contact: info@waterboard.lk)';
+  static const int maximumMapReports = 500;
 
   /// Verification settings
   static const double defaultVerificationRadiusMeters = 500.0;
