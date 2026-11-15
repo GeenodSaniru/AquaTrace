@@ -40,23 +40,17 @@ class DataRepository with ChangeNotifier {
 
   DataRepository({
     ReportSubmissionGateway? reportSubmissionGateway,
-<<<<<<< Updated upstream
     @visibleForTesting List<ReportModel>? initialReports,
-  }) : _reportSubmissionGateway =
-           reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
-    if (initialReports == null) {
-      _initialize();
-    } else {
-      _reports.addAll(initialReports);
-    }
-=======
     TechnicianJobGateway? technicianJobGateway,
   }) : _reportSubmissionGateway =
            reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
        _technicianJobGateway =
            technicianJobGateway ?? FirebaseTechnicianJobGateway() {
-    _initialize();
->>>>>>> Stashed changes
+    if (initialReports != null) {
+      _reports.addAll(initialReports);
+    } else {
+      _initialize();
+    }
     if (FirebaseService.isRealFirebase) {
       _listenForReports();
     }
@@ -289,7 +283,7 @@ class DataRepository with ChangeNotifier {
       await _persistReportUpdate(reportId, {
         'status': newStatus.name,
         'updatedAt': updatedAt.toIso8601String(),
-        if (note != null) 'repairNotes': note,
+        ...?note == null ? null : {'repairNotes': note},
       });
       _reports[index] = updated;
 

@@ -1,6 +1,31 @@
 # AquaTrace — Update Log
 
-<<<<<<< Updated upstream
+## 2026-11-15 10:31:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician dashboard and job details
+
+### Completed
+- Replaced the technician placeholder job modal with a dedicated job-detail screen.
+- Added job location/address, coordinates, severity, emergency flag, description, evidence previews, repair notes, and history details.
+- Preserved the assigned-only queue and dashboard counts.
+- Added map handoff from the job detail screen and dashboard navigation action.
+- Resolved a pre-existing merge-conflict marker in `DataRepository` while retaining the testing constructor and technician gateway support.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `lib/core/services/data_repository.dart`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — all tests passed. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Status controls, repair-note editing, and after-repair photo picker/upload are planned for Section 3.
+- `macos/Flutter/GeneratedPluginRegistrant.swift` remains an unrelated existing worktree modification and is not part of this section.
+
 ## 2026-11-14 22:15:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 final admin QA and map compatibility repair
 
 ### Completed
@@ -10,7 +35,6 @@
 - Added empty-repository regression coverage while preserving unauthorized-role, invalid-transition, correction, assignment, and assignment-time tests.
 - Confirmed client role gates are backed by repository Firebase role verification and Firestore rules; technician/admin/citizen modules continue to use the shared report/activity contracts without direct rewrites.
 - Re-inspected the visible one-page Figma contact sheet. Admin dashboard, report review/detail, assignment, and activity-style screens match the implemented workflow surfaces.
-=======
 ## 2026-11-15 09:54:47 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician workflow foundation
 
 ### Completed
@@ -22,12 +46,10 @@
 - `lib/core/services/data_repository.dart`
 - `lib/core/services/technician_job_gateway.dart`
 - `storage.rules`
->>>>>>> Stashed changes
 
 ### Checks
 | Command | Result |
 |---------|--------|
-<<<<<<< Updated upstream
 | `dart format lib/core/services/data_repository.dart test/admin_workflow_test.dart` | Pass; no formatting changes required. |
 | Workspace diagnostics (`get_errors`) | No errors in repository, map compatibility surface, admin dashboard/review, or admin workflow tests. |
 | `flutter analyze --no-pub` | Invoked; local Flutter runner did not return a completion line. Focused diagnostics are clean. |
@@ -251,7 +273,6 @@
 ### Git
 - 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
 - The initial push attempt was rejected, then completed after Git Credential Manager browser authentication. `git ls-remote origin refs/heads/sasundi` verified the branch at `5f155f1fd6ecbe85af2f98533a3c910ac992f594` on 2026-11-09.
-=======
 | `dart format lib/core/services/data_repository.dart lib/core/services/technician_job_gateway.dart` | Pass |
 | `flutter analyze` | Pass for Dart code; existing warning: configured `assets/icons/` directory is missing. |
 | `flutter test` | Pass — 23/23. |
@@ -279,7 +300,6 @@
 - Preflight inspection only; no code behavior changed in this section.
 - Git history/status inspected before implementation.
 
->>>>>>> Stashed changes
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed

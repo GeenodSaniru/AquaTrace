@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/fault_constants.dart';
+import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
@@ -11,8 +12,8 @@ import '../../../core/widgets/app_metric_card.dart';
 import '../../../core/widgets/app_priority_badge.dart';
 import '../../../core/widgets/app_report_card_tile.dart';
 import '../../../core/widgets/app_status_badge.dart';
-import '../../../core/models/report_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'technician_job_detail_screen.dart';
 
 /// Technician dashboard view conforming to the AquaTrace design specifications.
 class TechnicianHomeView extends StatelessWidget {
@@ -181,7 +182,7 @@ class TechnicianHomeView extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
-                              _showJobDetailModal(context, nextJob);
+                              _openJobDetails(context, nextJob);
                             },
                             child: const Text('View Job'),
                           ),
@@ -235,7 +236,7 @@ class TechnicianHomeView extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10.0),
                 child: AppReportCardTile(
                   report: job,
-                  onTap: () => _showJobDetailModal(context, job),
+                  onTap: () => _openJobDetails(context, job),
                 ),
               ),
             ),
@@ -245,58 +246,15 @@ class TechnicianHomeView extends StatelessWidget {
     );
   }
 
-  void _showJobDetailModal(BuildContext context, dynamic job) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Job ${job.reportId}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${job.faultType.displayName} · ${job.address}',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              job.description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.lightTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Technician job workflow (accepting, ongoing repair, and after-repair photo upload) is assigned to Member 6.',
-              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 16),
-            AppButton(label: 'Close', onPressed: () => Navigator.of(ctx).pop()),
-          ],
+  void _openJobDetails(BuildContext context, ReportModel job) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TechnicianJobDetailScreen(
+          report: job,
+          onNavigate: () {
+            Navigator.of(context).pop();
+            onNavigateTab?.call(2);
+          },
         ),
       ),
     );
