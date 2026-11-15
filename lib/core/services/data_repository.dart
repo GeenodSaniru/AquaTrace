@@ -13,6 +13,7 @@ import '../models/notification_item.dart';
 import '../models/report_model.dart';
 import 'firebase_service.dart';
 import 'report_submission_gateway.dart';
+import 'technician_job_gateway.dart';
 
 /// Central repository managing reports, activity timelines, and notifications.
 ///
@@ -20,6 +21,7 @@ import 'report_submission_gateway.dart';
 /// and reactive in-memory state during development or demo execution.
 class DataRepository with ChangeNotifier {
   final ReportSubmissionGateway _reportSubmissionGateway;
+  final TechnicianJobGateway _technicianJobGateway;
   final List<ReportModel> _reports = [];
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
@@ -38,6 +40,7 @@ class DataRepository with ChangeNotifier {
 
   DataRepository({
     ReportSubmissionGateway? reportSubmissionGateway,
+<<<<<<< Updated upstream
     @visibleForTesting List<ReportModel>? initialReports,
   }) : _reportSubmissionGateway =
            reportSubmissionGateway ?? FirebaseReportSubmissionGateway() {
@@ -46,6 +49,14 @@ class DataRepository with ChangeNotifier {
     } else {
       _reports.addAll(initialReports);
     }
+=======
+    TechnicianJobGateway? technicianJobGateway,
+  }) : _reportSubmissionGateway =
+           reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
+       _technicianJobGateway =
+           technicianJobGateway ?? FirebaseTechnicianJobGateway() {
+    _initialize();
+>>>>>>> Stashed changes
     if (FirebaseService.isRealFirebase) {
       _listenForReports();
     }
@@ -295,6 +306,119 @@ class DataRepository with ChangeNotifier {
 
       notifyListeners();
     }
+  }
+
+  Future<void> updateTechnicianJobStatus({
+    required String reportId,
+    required String technicianUid,
+    required String actorName,
+    required FaultStatus newStatus,
+    String? note,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+
+    final current = _reports[index];
+    if (current.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can update this job.',
+      );
+    }
+    if (!_isValidTechnicianTransition(current.status, newStatus)) {
+      throw const ValidationException(
+        'This job cannot move to the selected status.',
+      );
+    }
+    if (newStatus == FaultStatus.completed &&
+        (current.afterImageUrl == null || current.afterImageUrl!.isEmpty)) {
+      throw const ValidationException(
+        'Add an after-repair photo before completing the job.',
+      );
+    }
+
+    final updated = current.copyWith(
+      status: newStatus,
+      repairNotes: note ?? current.repairNotes,
+      updatedAt: DateTime.now(),
+    );
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      reportId: reportId,
+      title: 'Job ${newStatus.displayName}',
+      description:
+          note ??
+          'Job status changed to ${newStatus.displayName} by $actorName.',
+      actorName: actorName,
+      actorRole: 'Technician',
+      status: newStatus,
+      timestamp: DateTime.now(),
+    );
+
+    if (FirebaseService.isRealFirebase) {
+      await _technicianJobGateway.updateJob(
+        report: updated,
+        activity: activity,
+      );
+    }
+    _reports[index] = updated;
+    _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
+    notifyListeners();
+  }
+
+  Future<void> uploadTechnicianAfterRepairPhoto({
+    required String reportId,
+    required String technicianUid,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final index = _reports.indexWhere((r) => r.reportId == reportId);
+    if (index == -1) {
+      throw const ValidationException('The assigned job could not be found.');
+    }
+    final report = _reports[index];
+    if (report.assignedTechnicianUid != technicianUid) {
+      throw const PermissionException(
+        'Only the assigned technician can upload repair evidence.',
+      );
+    }
+    if (report.status != FaultStatus.ongoing) {
+      throw const ValidationException(
+        'Start the job before adding repair evidence.',
+      );
+    }
+    if (!const {
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+    }.contains(contentType)) {
+      throw const ValidationException(
+        'Choose a JPEG, PNG, WebP, or HEIC repair photo.',
+      );
+    }
+
+    if (!FirebaseService.isRealFirebase) {
+      throw const PermissionException(
+        'Demo accounts cannot upload technician evidence.',
+      );
+    }
+    final imageUrl = await _technicianJobGateway.uploadAfterRepairPhoto(
+      report: report,
+      bytes: bytes,
+      contentType: contentType,
+    );
+    _reports[index] = report.copyWith(
+      afterImageUrl: imageUrl,
+      updatedAt: DateTime.now(),
+    );
+    notifyListeners();
+  }
+
+  bool _isValidTechnicianTransition(FaultStatus current, FaultStatus next) {
+    return (current == FaultStatus.assigned && next == FaultStatus.ongoing) ||
+        (current == FaultStatus.ongoing && next == FaultStatus.completed);
   }
 
   Future<void> assignTechnician({

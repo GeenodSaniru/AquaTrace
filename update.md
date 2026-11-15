@@ -1,5 +1,6 @@
 # AquaTrace — Update Log
 
+<<<<<<< Updated upstream
 ## 2026-11-14 22:15:06 +05:30 (Asia/Colombo, UTC+05:30) — Member 5 final admin QA and map compatibility repair
 
 ### Completed
@@ -9,10 +10,24 @@
 - Added empty-repository regression coverage while preserving unauthorized-role, invalid-transition, correction, assignment, and assignment-time tests.
 - Confirmed client role gates are backed by repository Firebase role verification and Firestore rules; technician/admin/citizen modules continue to use the shared report/activity contracts without direct rewrites.
 - Re-inspected the visible one-page Figma contact sheet. Admin dashboard, report review/detail, assignment, and activity-style screens match the implemented workflow surfaces.
+=======
+## 2026-11-15 09:54:47 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician workflow foundation
+
+### Completed
+- Added a technician job gateway for Firestore report updates, append-only activity history, and Firebase Storage after-repair evidence.
+- Added repository operations that enforce assigned-technician ownership, legal `assigned -> ongoing -> completed` transitions, completion-photo requirement, repair notes, and update timestamps.
+- Added technician-scoped `repairEvidence/{technicianUid}/{reportId}` Storage rules with image type and 10 MB validation.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/core/services/technician_job_gateway.dart`
+- `storage.rules`
+>>>>>>> Stashed changes
 
 ### Checks
 | Command | Result |
 |---------|--------|
+<<<<<<< Updated upstream
 | `dart format lib/core/services/data_repository.dart test/admin_workflow_test.dart` | Pass; no formatting changes required. |
 | Workspace diagnostics (`get_errors`) | No errors in repository, map compatibility surface, admin dashboard/review, or admin workflow tests. |
 | `flutter analyze --no-pub` | Invoked; local Flutter runner did not return a completion line. Focused diagnostics are clean. |
@@ -236,6 +251,35 @@
 ### Git
 - 2026-11-09 13:23:07 +0530 (UTC+0530): committed on `sasundi` as `133eeecadadcd523013354251d5c47ba3b9e33c4` (`feat(profile): implement profile and settings module`).
 - The initial push attempt was rejected, then completed after Git Credential Manager browser authentication. `git ls-remote origin refs/heads/sasundi` verified the branch at `5f155f1fd6ecbe85af2f98533a3c910ac992f594` on 2026-11-09.
+=======
+| `dart format lib/core/services/data_repository.dart lib/core/services/technician_job_gateway.dart` | Pass |
+| `flutter analyze` | Pass for Dart code; existing warning: configured `assets/icons/` directory is missing. |
+| `flutter test` | Pass — 23/23. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Technician dashboard/detail UI, status controls, photo picker, and map handoff are in the next sections.
+- Live Firebase Storage/Firestore execution remains environment-dependent and was not exercised with a real technician account.
+
+## 2026-11-15 09:29:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 technician module preflight
+
+### Completed
+- Audited the repository README, Member 1 handoff, team prompts, current `update.md`, Firebase configuration, role model, report contract, repository, technician shell, map screen, theme, and security rules.
+- Located the required UI reference at `docs/AquaTrace UI.pdf` and reviewed the extracted technician dashboard/job-queue references in `docs/ui_pdf_extracted_text.txt`.
+- Confirmed the existing technician entry point is `TechnicianMainShell` and the current technician data source is `DataRepository.getReportsForTechnician`.
+- Confirmed existing shared contracts: `ReportModel`, `FaultStatus` (`pending`, `assigned`, `ongoing`, `completed`, `disputed`), `UserRole.technician`, and `SharedMapView`.
+- Identified the implementation gaps for Member 6: technician-only status mutation checks, persisted status-history timestamps, technician repair-note/photo updates, technician-scoped Storage rules, and a dedicated job detail/queue workflow.
+
+### Outstanding
+- Implement the technician repository operations and status-history contract.
+- Implement the technician dashboard, assigned queue, job detail actions, repair notes, and after-repair photo upload.
+- Wire the map handoff and validate role gating, transitions, upload behavior, analyzer/tests/build.
+
+### Checks
+- Preflight inspection only; no code behavior changed in this section.
+- Git history/status inspected before implementation.
+
+>>>>>>> Stashed changes
 ## 2026-11-09 12:48:59 +05:30 (Asia/Colombo, UTC+05:30) — Member 3 citizen fault reporting
 
 ### Completed
