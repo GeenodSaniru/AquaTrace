@@ -1,5 +1,31 @@
 # AquaTrace — Update Log
 
+## 2026-11-15 14:15:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 2
+
+### Completed
+- Added technician dashboard feedback for report synchronization errors and retry, plus a loading indicator while assigned jobs are being fetched.
+- Added integration regression coverage for assignment changes, reassignment queue visibility, offline/demo photo upload rejection, invalid repair notes, invalid image types, ownership, and transition enforcement.
+- Verified failed preconditions leave the report unchanged rather than presenting a success-shaped state.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/technician/presentation/technician_home_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 8/8. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 3 will perform final Prompt 6B launch/build review and document live Firebase/offline environment blockers.
+- Real network failure/retry and Storage upload failure require an authenticated Firebase technician account or emulator.
+
 ## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
 
 ### Completed
