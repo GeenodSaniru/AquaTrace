@@ -1,5 +1,30 @@
 # AquaTrace — Update Log
 
+## 2026-11-16 11:17:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 3
+
+### Completed
+- Added a stale-assignment guard to the technician job detail screen.
+- When a job is reassigned, removed, or no longer belongs to the signed-in technician, cached job details and technician actions are hidden.
+- Job detail rendering now reads the latest report from `DataRepository`, so status, notes, evidence, and assignment changes refresh from shared state.
+- Revalidated technician login-role assumptions, queue reassignment behavior, workflow refresh, ownership checks, and admin-action restrictions.
+
+### Files changed
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_job_detail_screen.dart lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+| Technician widget harness test | Not retained — the isolated detail-screen harness hung before completing despite bounded pumps; production guard was validated by analyzer and deterministic repository workflow tests. |
+
+### Outstanding
+- Section 4 will run the final full test suite, formatter/analyzer, web build, launch/runtime availability check, and final handoff QA.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
 ## 2026-11-16 08:48:58 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 2
 
 ### Completed
