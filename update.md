@@ -1,5 +1,32 @@
 # AquaTrace — Update Log
 
+## 2026-11-16 08:48:58 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 2
+
+### Completed
+- Added explicit role validation to admin-only technician assignment and report-severity operations.
+- Updated the admin report UI to pass the authenticated administrator role to repository mutations.
+- Added regression coverage proving technician-role calls cannot assign jobs or change report severity.
+- Re-ran technician queue, transition, ownership, assignment, and failure-path tests after the authorization change.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/features/admin/presentation/admin_reports_view.dart`
+- `test/admin_workflow_test.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 3–4 will cover full UI workflow/refresh checks, upload and permission failure paths, final launch/build QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
 ## 2026-11-15 19:11:52 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 1
 
 ### Completed

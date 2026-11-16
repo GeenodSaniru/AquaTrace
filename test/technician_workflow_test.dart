@@ -136,6 +136,7 @@ void main() {
       technicianUid: 'new-technician',
       technicianName: 'New Technician',
       adminName: 'Dispatcher',
+      actorRole: 'Admin',
     );
 
     expect(
@@ -162,6 +163,7 @@ void main() {
         technicianUid: '',
         technicianName: 'Unassigned',
         adminName: 'Dispatcher',
+        actorRole: 'Admin',
       ),
       throwsA(isA<ValidationException>()),
     );

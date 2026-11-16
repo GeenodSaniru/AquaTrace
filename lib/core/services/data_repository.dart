@@ -507,8 +507,12 @@ class DataRepository with ChangeNotifier {
     required String technicianUid,
     required String technicianName,
     required String adminName,
+    required String actorRole,
   }) async {
-    await _requireAuthorizedActor('Admin');
+    await _requireAuthorizedActor(actorRole);
+    if (actorRole.trim().toLowerCase() != 'admin') {
+      throw const PermissionException('Administrator access is required.');
+    }
     if (technicianUid.trim().isEmpty || technicianName.trim().isEmpty) {
       throw const ValidationException(
         'A technician identity is required for assignment.',
@@ -556,8 +560,12 @@ class DataRepository with ChangeNotifier {
     required String reportId,
     required FaultSeverity severity,
     required String adminName,
+    required String actorRole,
   }) async {
-    await _requireAuthorizedActor('Admin');
+    await _requireAuthorizedActor(actorRole);
+    if (actorRole.trim().toLowerCase() != 'admin') {
+      throw const PermissionException('Administrator access is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) return;
     final updatedAt = DateTime.now();

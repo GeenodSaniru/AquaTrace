@@ -213,6 +213,7 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
         technicianUid: selected,
         technicianName: technicians[selected]!,
         adminName: admin.displayName,
+        actorRole: admin.role.name,
       );
     });
   }
@@ -224,6 +225,7 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
         reportId: widget.report.reportId,
         severity: severity,
         adminName: admin.displayName,
+        actorRole: admin.role.name,
       );
     });
   }
