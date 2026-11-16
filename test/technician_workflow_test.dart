@@ -28,6 +28,34 @@ void main() {
     );
   });
 
+  test('missing technician identity cannot expose unassigned jobs', () {
+    final repository = DataRepository(
+      initialReports: [
+        MockData.initialReports.first.copyWith(
+          assignedTechnicianUid: null,
+          assignedTechnicianName: null,
+        ),
+      ],
+    );
+
+    expect(repository.getReportsForTechnician(''), isEmpty);
+    expect(repository.getReportsForTechnician('   '), isEmpty);
+  });
+
+  test('technician actions reject a missing identity', () {
+    final repository = DataRepository();
+
+    expect(
+      () => repository.updateTechnicianJobStatus(
+        reportId: 'AT-2026-00128',
+        technicianUid: ' ',
+        actorName: 'Unknown',
+        newStatus: FaultStatus.ongoing,
+      ),
+      throwsA(isA<PermissionException>()),
+    );
+  });
+
   test('technician can start only their assigned job', () async {
     final repository = DataRepository();
 
@@ -122,6 +150,20 @@ void main() {
           .getReportsForTechnician(MockData.technicianUser.uid)
           .any((report) => report.reportId == 'AT-2026-00125'),
       isFalse,
+    );
+  });
+
+  test('assignment rejects missing technician data', () {
+    final repository = DataRepository();
+
+    expect(
+      () => repository.assignTechnician(
+        reportId: 'AT-2026-00125',
+        technicianUid: '',
+        technicianName: 'Unassigned',
+        adminName: 'Dispatcher',
+      ),
+      throwsA(isA<ValidationException>()),
     );
   });
 

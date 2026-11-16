@@ -73,8 +73,12 @@ class DataRepository with ChangeNotifier {
   }
 
   List<ReportModel> getReportsForTechnician(String technicianUid) {
+    final normalizedUid = technicianUid.trim();
+    if (normalizedUid.isEmpty) {
+      return const [];
+    }
     return _reports
-        .where((r) => r.assignedTechnicianUid == technicianUid)
+        .where((r) => r.assignedTechnicianUid?.trim() == normalizedUid)
         .toList();
   }
 
@@ -328,6 +332,9 @@ class DataRepository with ChangeNotifier {
     required FaultStatus newStatus,
     String? note,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -386,6 +393,9 @@ class DataRepository with ChangeNotifier {
     required Uint8List bytes,
     required String contentType,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -437,6 +447,9 @@ class DataRepository with ChangeNotifier {
     required String actorName,
     required String notes,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -496,6 +509,11 @@ class DataRepository with ChangeNotifier {
     required String adminName,
   }) async {
     await _requireAuthorizedActor('Admin');
+    if (technicianUid.trim().isEmpty || technicianName.trim().isEmpty) {
+      throw const ValidationException(
+        'A technician identity is required for assignment.',
+      );
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
       final report = _reports[index];
