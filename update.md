@@ -1,5 +1,182 @@
 # AquaTrace — Update Log
 
+## 2026-11-16 15:19:21 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 corrective audit
+
+### Fixed
+- Preserved the selected job during technician-to-map navigation handoff.
+- Removed the cached-report fallback from job details so deleted jobs no longer remain visible after refresh.
+- Added live activity timeline entries to the technician job history.
+- Rejected unsupported photo extensions instead of silently treating them as JPEG.
+- Synchronized repair-note text with refreshed report data without overwriting active technician edits.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Merge-conflict marker scan | Pass — none found in Dart or Markdown. |
+| Dart hot restart | Not run — no Flutter app connected to the Dart Tooling Daemon. |
+
+### Remaining environment limitations
+- Live Firebase Firestore/Storage permissions, weak-network behavior, physical camera/storage permissions, and device image-picker behavior require an authenticated Firebase account, emulator, or physical device.
+
+## 2026-11-16 15:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 4
+
+### Completed
+- Completed final technician regression and handoff QA for login role routing, assigned queue filtering, job details, navigation/map handoff, status workflow, notes, evidence gating, assignment refresh, stale assignment protection, job history, and admin-action restrictions.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+- Reviewed the final Git diff and verified only the Section 4 update-log change remains locally.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart Tooling Daemon app discovery | No connected Flutter app found. |
+| Dart hot restart / interactive launch | Not run — requires a connected debug Flutter app. |
+
+### Handoff notes and limitations
+- Member 1 owns authentication, role provisioning, routing, shared models, and Firebase initialization.
+- Member 4 owns the shared map surface and navigation handoff.
+- Member 5 owns admin assignment and dispatch actions.
+- Member 8 owns notification delivery and activity presentation.
+- Live Firestore/Storage permissions, weak-network retries, camera/storage permission denial, and physical-device picker behavior require an authenticated Firebase technician account, emulator, or device.
+- Prompt 6C Section 4 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-16 11:17:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 3
+
+### Completed
+- Added a stale-assignment guard to the technician job detail screen.
+- When a job is reassigned, removed, or no longer belongs to the signed-in technician, cached job details and technician actions are hidden.
+- Job detail rendering now reads the latest report from `DataRepository`, so status, notes, evidence, and assignment changes refresh from shared state.
+- Revalidated technician login-role assumptions, queue reassignment behavior, workflow refresh, ownership checks, and admin-action restrictions.
+
+### Files changed
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_job_detail_screen.dart lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+| Technician widget harness test | Not retained — the isolated detail-screen harness hung before completing despite bounded pumps; production guard was validated by analyzer and deterministic repository workflow tests. |
+
+### Outstanding
+- Section 4 will run the final full test suite, formatter/analyzer, web build, launch/runtime availability check, and final handoff QA.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-16 08:48:58 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 2
+
+### Completed
+- Added explicit role validation to admin-only technician assignment and report-severity operations.
+- Updated the admin report UI to pass the authenticated administrator role to repository mutations.
+- Added regression coverage proving technician-role calls cannot assign jobs or change report severity.
+- Re-ran technician queue, transition, ownership, assignment, and failure-path tests after the authorization change.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/features/admin/presentation/admin_reports_view.dart`
+- `test/admin_workflow_test.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 3–4 will cover full UI workflow/refresh checks, upload and permission failure paths, final launch/build QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 19:11:52 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 1
+
+### Completed
+- Reviewed the technician implementation, role/authentication flow, shared contracts, handoff notes, Git status, and technician UI reference screens in `docs/AquaTrace UI.pdf` and `docs/ui_pdf_extracted_text.txt`.
+- Prevented blank technician identities from exposing malformed or unassigned jobs through the local technician queue.
+- Rejected technician status, notes, and evidence operations without a valid technician identity.
+- Rejected admin assignments missing a technician UID or technician name.
+- Added regression tests for missing assignment data and identity-boundary enforcement.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 2–4 will cover full role/login and UI workflow regression, failure-path verification, final build/launch QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 18:59:57 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 3
+
+### Completed
+- Performed final Prompt 6B QA for technician assignment filtering, workflow transitions, ownership checks, evidence gating, error handling, and shared report synchronization.
+- Confirmed technician Firestore reads are scoped to `assignedTechnicianUid == auth.uid`.
+- Confirmed technician transitions remain limited to `assigned -> ongoing -> completed`, with completion requiring after-repair evidence.
+- Confirmed repair evidence uses technician-scoped Firebase Storage rules and invalid/offline operations do not mutate local report state.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Outstanding
+- Live Firestore/Storage permission behavior, network retry behavior, and physical image-picker permissions still require an authenticated Firebase technician account or emulator/device.
+- Section 3 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-15 14:15:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 2
+
+### Completed
+- Added technician dashboard feedback for report synchronization errors and retry, plus a loading indicator while assigned jobs are being fetched.
+- Added integration regression coverage for assignment changes, reassignment queue visibility, offline/demo photo upload rejection, invalid repair notes, invalid image types, ownership, and transition enforcement.
+- Verified failed preconditions leave the report unchanged rather than presenting a success-shaped state.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/technician/presentation/technician_home_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 8/8. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 3 will perform final Prompt 6B launch/build review and document live Firebase/offline environment blockers.
+- Real network failure/retry and Storage upload failure require an authenticated Firebase technician account or emulator.
+
 ## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
 
 ### Completed

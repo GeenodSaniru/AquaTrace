@@ -30,6 +30,7 @@ class TechnicianJobDetailScreen extends StatefulWidget {
 class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
   late ReportModel _report;
   late final TextEditingController _notesController;
+  final FocusNode _notesFocusNode = FocusNode();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isSaving = false;
   bool _isPickingPhoto = false;
@@ -44,6 +45,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
   @override
   void dispose() {
     _notesController.dispose();
+    _notesFocusNode.dispose();
     super.dispose();
   }
 
@@ -51,6 +53,29 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final authUser = context.watch<AuthProvider>().currentUser;
+    final currentReport = context.watch<DataRepository>().getReportById(
+      _report.reportId,
+    );
+    final report = currentReport;
+    final isAssignedToCurrentUser =
+        authUser?.uid.isNotEmpty == true &&
+        report?.assignedTechnicianUid == authUser!.uid;
+
+    if (report == null || !isAssignedToCurrentUser) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Job Details')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'This job is no longer assigned to your technician account.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -71,18 +96,18 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _report.reportId,
+                report.reportId,
                 style: const TextStyle(
                   color: AppColors.primaryCyan,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              AppStatusBadge(status: _report.status),
+              AppStatusBadge(status: report.status),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            _report.faultType.displayName,
+            report.faultType.displayName,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -90,9 +115,9 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              AppPriorityBadge(severity: _report.severity),
+              AppPriorityBadge(severity: report.severity),
               const SizedBox(width: 10),
-              if (_report.isEmergency)
+              if (report.isEmergency)
                 const Chip(
                   avatar: Icon(Icons.warning_amber_rounded, size: 16),
                   label: Text('Emergency'),
@@ -107,15 +132,15 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _report.address,
+                  report.address,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${_report.latitude.toStringAsFixed(5)}, '
-                  '${_report.longitude.toStringAsFixed(5)}',
+                  '${report.latitude.toStringAsFixed(5)}, '
+                  '${report.longitude.toStringAsFixed(5)}',
                   style: TextStyle(
                     color: isDark
                         ? AppColors.darkTextSecondary
@@ -140,23 +165,23 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
           _DetailCard(
             title: 'Fault description',
             icon: Icons.description_outlined,
-            child: Text(_report.description),
+            child: Text(report.description),
           ),
           const SizedBox(height: 14),
           _EvidenceCard(
             title: 'Before-repair evidence',
-            imageUrl: _report.beforeImageUrl,
+            imageUrl: report.beforeImageUrl,
           ),
-          if (_report.afterImageUrl != null &&
-              _report.afterImageUrl!.isNotEmpty) ...[
+          if (report.afterImageUrl != null &&
+              report.afterImageUrl!.isNotEmpty) ...[
             const SizedBox(height: 14),
             _EvidenceCard(
               title: 'After-repair evidence',
-              imageUrl: _report.afterImageUrl,
+              imageUrl: report.afterImageUrl,
             ),
           ],
           const SizedBox(height: 14),
-          _buildActionCard(context),
+          _buildActionCard(context, report),
           const SizedBox(height: 14),
           _DetailCard(
             title: 'Job history',
@@ -166,19 +191,28 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
               children: [
                 _HistoryRow(
                   label: 'Reported',
-                  value: _formatDate(_report.createdAt),
+                  value: _formatDate(report.createdAt),
                 ),
-                if (_report.updatedAt != null)
+                if (report.updatedAt != null)
                   _HistoryRow(
                     label: 'Last updated',
-                    value: _formatDate(_report.updatedAt!),
+                    value: _formatDate(report.updatedAt!),
                   ),
-                if (_report.repairNotes != null &&
-                    _report.repairNotes!.trim().isNotEmpty)
+                if (report.repairNotes != null &&
+                    report.repairNotes!.trim().isNotEmpty)
                   _HistoryRow(
                     label: 'Repair notes',
-                    value: _report.repairNotes!,
+                    value: report.repairNotes!,
                   ),
+                ...context
+                    .read<DataRepository>()
+                    .getTimelineForReport(report.reportId)
+                    .map(
+                      (event) => _HistoryRow(
+                        label: event.title,
+                        value: _formatDate(event.timestamp),
+                      ),
+                    ),
               ],
             ),
           ),
@@ -187,9 +221,9 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
     );
   }
 
-  Widget _buildActionCard(BuildContext context) {
-    final isAssigned = _report.status == FaultStatus.assigned;
-    final isOngoing = _report.status == FaultStatus.ongoing;
+  Widget _buildActionCard(BuildContext context, ReportModel report) {
+    final isAssigned = report.status == FaultStatus.assigned;
+    final isOngoing = report.status == FaultStatus.ongoing;
     if (!isAssigned && !isOngoing) {
       return const SizedBox.shrink();
     }
@@ -210,6 +244,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
           if (isOngoing) ...[
             TextField(
               controller: _notesController,
+              focusNode: _notesFocusNode,
               maxLines: 4,
               maxLength: 2000,
               decoration: const InputDecoration(
@@ -236,7 +271,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
                     )
                   : const Icon(Icons.add_a_photo_outlined),
               label: Text(
-                _report.afterImageUrl == null
+                report.afterImageUrl == null
                     ? 'Upload after-repair photo'
                     : 'Replace after-repair photo',
               ),
@@ -246,7 +281,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
               label: 'Mark Job Completed',
               icon: Icons.check_circle_outline_rounded,
               isLoading: _isSaving,
-              onPressed: _report.afterImageUrl == null ? null : _completeJob,
+              onPressed: report.afterImageUrl == null ? null : _completeJob,
             ),
           ],
         ],
@@ -305,6 +340,9 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
       if (image == null) return;
       final bytes = await image.readAsBytes();
       final contentType = _contentTypeFor(image.name);
+      if (contentType == null) {
+        throw const FormatException('Choose a JPEG, PNG, WebP, or HEIC image.');
+      }
       if (!mounted) return;
       final auth = context.read<AuthProvider>().currentUser;
       final repository = context.read<DataRepository>();
@@ -345,17 +383,23 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
       _report.reportId,
     );
     if (current != null && mounted) {
-      setState(() => _report = current);
+      setState(() {
+        _report = current;
+        if (!_notesFocusNode.hasFocus) {
+          _notesController.text = current.repairNotes ?? '';
+        }
+      });
     }
   }
 
-  String _contentTypeFor(String fileName) {
+  String? _contentTypeFor(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
     return switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
       'png' => 'image/png',
       'webp' => 'image/webp',
       'heic' => 'image/heic',
-      _ => 'image/jpeg',
+      _ => null,
     };
   }
 
