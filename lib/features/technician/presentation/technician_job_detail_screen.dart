@@ -30,6 +30,7 @@ class TechnicianJobDetailScreen extends StatefulWidget {
 class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
   late ReportModel _report;
   late final TextEditingController _notesController;
+  final FocusNode _notesFocusNode = FocusNode();
   final ImagePicker _imagePicker = ImagePicker();
   bool _isSaving = false;
   bool _isPickingPhoto = false;
@@ -44,6 +45,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
   @override
   void dispose() {
     _notesController.dispose();
+    _notesFocusNode.dispose();
     super.dispose();
   }
 
@@ -55,12 +57,12 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
     final currentReport = context.watch<DataRepository>().getReportById(
       _report.reportId,
     );
-    final report = currentReport ?? _report;
+    final report = currentReport;
     final isAssignedToCurrentUser =
         authUser?.uid.isNotEmpty == true &&
-        report.assignedTechnicianUid == authUser!.uid;
+        report?.assignedTechnicianUid == authUser!.uid;
 
-    if (!isAssignedToCurrentUser) {
+    if (report == null || !isAssignedToCurrentUser) {
       return Scaffold(
         appBar: AppBar(title: const Text('Job Details')),
         body: const Center(
@@ -202,6 +204,15 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
                     label: 'Repair notes',
                     value: report.repairNotes!,
                   ),
+                ...context
+                    .read<DataRepository>()
+                    .getTimelineForReport(report.reportId)
+                    .map(
+                      (event) => _HistoryRow(
+                        label: event.title,
+                        value: _formatDate(event.timestamp),
+                      ),
+                    ),
               ],
             ),
           ),
@@ -233,6 +244,7 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
           if (isOngoing) ...[
             TextField(
               controller: _notesController,
+              focusNode: _notesFocusNode,
               maxLines: 4,
               maxLength: 2000,
               decoration: const InputDecoration(
@@ -328,6 +340,9 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
       if (image == null) return;
       final bytes = await image.readAsBytes();
       final contentType = _contentTypeFor(image.name);
+      if (contentType == null) {
+        throw const FormatException('Choose a JPEG, PNG, WebP, or HEIC image.');
+      }
       if (!mounted) return;
       final auth = context.read<AuthProvider>().currentUser;
       final repository = context.read<DataRepository>();
@@ -368,17 +383,23 @@ class _TechnicianJobDetailScreenState extends State<TechnicianJobDetailScreen> {
       _report.reportId,
     );
     if (current != null && mounted) {
-      setState(() => _report = current);
+      setState(() {
+        _report = current;
+        if (!_notesFocusNode.hasFocus) {
+          _notesController.text = current.repairNotes ?? '';
+        }
+      });
     }
   }
 
-  String _contentTypeFor(String fileName) {
+  String? _contentTypeFor(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
     return switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
       'png' => 'image/png',
       'webp' => 'image/webp',
       'heic' => 'image/heic',
-      _ => 'image/jpeg',
+      _ => null,
     };
   }
 

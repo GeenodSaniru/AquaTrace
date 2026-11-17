@@ -1,5 +1,55 @@
 # AquaTrace — Update Log
 
+## 2026-11-16 15:19:21 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 corrective audit
+
+### Fixed
+- Preserved the selected job during technician-to-map navigation handoff.
+- Removed the cached-report fallback from job details so deleted jobs no longer remain visible after refresh.
+- Added live activity timeline entries to the technician job history.
+- Rejected unsupported photo extensions instead of silently treating them as JPEG.
+- Synchronized repair-note text with refreshed report data without overwriting active technician edits.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Merge-conflict marker scan | Pass — none found in Dart or Markdown. |
+| Dart hot restart | Not run — no Flutter app connected to the Dart Tooling Daemon. |
+
+### Remaining environment limitations
+- Live Firebase Firestore/Storage permissions, weak-network behavior, physical camera/storage permissions, and device image-picker behavior require an authenticated Firebase account, emulator, or physical device.
+
+## 2026-11-16 15:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 4
+
+### Completed
+- Completed final technician regression and handoff QA for login role routing, assigned queue filtering, job details, navigation/map handoff, status workflow, notes, evidence gating, assignment refresh, stale assignment protection, job history, and admin-action restrictions.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+- Reviewed the final Git diff and verified only the Section 4 update-log change remains locally.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart Tooling Daemon app discovery | No connected Flutter app found. |
+| Dart hot restart / interactive launch | Not run — requires a connected debug Flutter app. |
+
+### Handoff notes and limitations
+- Member 1 owns authentication, role provisioning, routing, shared models, and Firebase initialization.
+- Member 4 owns the shared map surface and navigation handoff.
+- Member 5 owns admin assignment and dispatch actions.
+- Member 8 owns notification delivery and activity presentation.
+- Live Firestore/Storage permissions, weak-network retries, camera/storage permission denial, and physical-device picker behavior require an authenticated Firebase technician account, emulator, or device.
+- Prompt 6C Section 4 is ready for manual upload to the GitHub `test` branch.
+
 ## 2026-11-16 11:17:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 3
 
 ### Completed

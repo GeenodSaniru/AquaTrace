@@ -267,7 +267,7 @@ class TechnicianHomeView extends StatelessWidget {
           report: job,
           onNavigate: () {
             Navigator.of(context).pop();
-            onNavigateTab?.call(2);
+            onNavigateTab?.call(2, job);
           },
         ),
       ),
