@@ -8,9 +8,14 @@ import '../config/app_config.dart';
 import '../constants/fault_constants.dart';
 import '../errors/app_exception.dart';
 import '../models/activity_timeline_event.dart';
+import '../models/dispute_record_model.dart';
 import '../models/mock_data.dart';
 import '../models/notification_item.dart';
 import '../models/report_model.dart';
+import '../models/user_model.dart';
+import '../models/verification_vote_model.dart';
+import '../../features/verification/services/community_verification_service.dart';
+import 'community_verification_gateway.dart';
 import 'firebase_service.dart';
 import 'report_submission_gateway.dart';
 import 'technician_job_gateway.dart';
@@ -22,9 +27,12 @@ import 'technician_job_gateway.dart';
 class DataRepository with ChangeNotifier {
   final ReportSubmissionGateway _reportSubmissionGateway;
   final TechnicianJobGateway _technicianJobGateway;
+  final CommunityVerificationGateway _communityVerificationGateway;
   final List<ReportModel> _reports = [];
   final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
+  final Map<String, List<VerificationVoteModel>> _reportVerifications = {};
+  final Map<String, List<DisputeRecordModel>> _reportDisputes = {};
   final Set<String> _submissionsInFlight = {};
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
@@ -42,10 +50,14 @@ class DataRepository with ChangeNotifier {
     ReportSubmissionGateway? reportSubmissionGateway,
     @visibleForTesting List<ReportModel>? initialReports,
     TechnicianJobGateway? technicianJobGateway,
+    CommunityVerificationGateway? communityVerificationGateway,
   }) : _reportSubmissionGateway =
            reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
        _technicianJobGateway =
-           technicianJobGateway ?? FirebaseTechnicianJobGateway() {
+           technicianJobGateway ?? FirebaseTechnicianJobGateway(),
+       _communityVerificationGateway =
+           communityVerificationGateway ??
+           FirebaseCommunityVerificationGateway() {
     if (initialReports != null) {
       _reports.addAll(initialReports);
     } else {
@@ -63,6 +75,38 @@ class DataRepository with ChangeNotifier {
       _reportTimelines['AT-2026-00124'] = List.from(
         MockData.activityTimelineFor124,
       );
+      _reportVerifications['AT-2026-00126'] = [
+        VerificationVoteModel(
+          voterUid: 'citizen-sarath-010',
+          voterName: 'Sarath Gunawardena',
+          reportId: 'AT-2026-00126',
+          createdAt: DateTime(2026, 9, 24, 12, 0),
+          note: 'Roadway is clear and leak is stopped.',
+        ),
+        VerificationVoteModel(
+          voterUid: 'citizen-anula-011',
+          voterName: 'Anula Weerasinghe',
+          reportId: 'AT-2026-00126',
+          createdAt: DateTime(2026, 9, 24, 12, 30),
+          note: 'Confirmed dry pavement.',
+        ),
+      ];
+      _reportDisputes['AT-2026-00127'] = [
+        DisputeRecordModel(
+          voterUid: 'citizen-priyantha-012',
+          voterName: 'Priyantha Alwis',
+          reportId: 'AT-2026-00127',
+          reason: 'Water continues to pool along pavement curb.',
+          createdAt: DateTime(2026, 9, 23, 10, 15),
+        ),
+        DisputeRecordModel(
+          voterUid: 'citizen-chandani-013',
+          voterName: 'Chandani Silva',
+          reportId: 'AT-2026-00127',
+          reason: 'Repair asphalt collapsed; leak still active.',
+          createdAt: DateTime(2026, 9, 23, 14, 45),
+        ),
+      ];
     }
   }
 
@@ -698,6 +742,255 @@ class DataRepository with ChangeNotifier {
     for (int i = 0; i < _notifications.length; i++) {
       _notifications[i] = _notifications[i].copyWith(isRead: true);
     }
+    notifyListeners();
+  }
+
+  // --- Community Verification & Disputes (Member 7) ---
+
+  List<VerificationVoteModel> getVerificationsForReport(String reportId) {
+    return List.unmodifiable(_reportVerifications[reportId] ?? const []);
+  }
+
+  List<DisputeRecordModel> getDisputesForReport(String reportId) {
+    return List.unmodifiable(_reportDisputes[reportId] ?? const []);
+  }
+
+  bool hasUserVotedOnReport({
+    required String reportId,
+    required String userUid,
+  }) {
+    final normalizedUid = userUid.trim();
+    final hasVerified =
+        _reportVerifications[reportId]?.any(
+          (v) => v.voterUid.trim() == normalizedUid,
+        ) ??
+        false;
+    final hasDisputed =
+        _reportDisputes[reportId]?.any(
+          (d) => d.voterUid.trim() == normalizedUid,
+        ) ??
+        false;
+    return hasVerified || hasDisputed;
+  }
+
+  /// Returns completed reports eligible for community verification within [radiusKm].
+  List<ReportModel> getCompletedReportsNearby({
+    required double latitude,
+    required double longitude,
+    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+  }) {
+    return _reports.where((report) {
+      if (report.status != FaultStatus.completed) return false;
+      final dist = CommunityVerificationService.calculateDistanceKm(
+        startLatitude: latitude,
+        startLongitude: longitude,
+        endLatitude: report.latitude,
+        endLongitude: report.longitude,
+      );
+      return dist <= radiusKm;
+    }).toList();
+  }
+
+  Future<void> submitCommunityVerification({
+    required ReportModel report,
+    required UserModel voter,
+    String? note,
+    double? userLatitude,
+    double? userLongitude,
+    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+  }) async {
+    final alreadyVoted = hasUserVotedOnReport(
+      reportId: report.reportId,
+      userUid: voter.uid,
+    );
+
+    final eligibility = CommunityVerificationService.checkEligibility(
+      report: report,
+      user: voter,
+      userLatitude: userLatitude,
+      userLongitude: userLongitude,
+      hasAlreadyVoted: alreadyVoted,
+      radiusKm: radiusKm,
+    );
+
+    if (!eligibility.isEligible) {
+      throw ValidationException(
+        eligibility.reason ?? 'You are not eligible to verify this repair.',
+      );
+    }
+
+    final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+    if (index == -1) {
+      throw const DatabaseException('Report not found.');
+    }
+
+    final currentReport = _reports[index];
+    final newCount = currentReport.verificationCount + 1;
+    final vote = VerificationVoteModel(
+      voterUid: voter.uid,
+      voterName: voter.displayName,
+      reportId: report.reportId,
+      createdAt: DateTime.now(),
+      note: note,
+    );
+
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+      reportId: report.reportId,
+      title: 'Community Verification Confirmed',
+      description:
+          '${voter.displayName} confirmed repair completion.${note != null && note.isNotEmpty ? ' Note: "$note"' : ''}',
+      actorName: voter.displayName,
+      actorRole: 'Citizen Verification',
+      status: FaultStatus.completed,
+      timestamp: DateTime.now(),
+    );
+
+    await _communityVerificationGateway.submitVerification(
+      report: currentReport,
+      vote: vote,
+      activity: activity,
+      newVerificationCount: newCount,
+    );
+
+    // Update in-memory state
+    _reportVerifications.putIfAbsent(report.reportId, () => []).add(vote);
+    _reports[index] = currentReport.copyWith(
+      verificationCount: newCount,
+      updatedAt: DateTime.now(),
+    );
+
+    _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+    // If threshold reached, add milestone activity
+    if (newCount >= CommunityVerificationService.confirmationThreshold &&
+        currentReport.verificationCount <
+            CommunityVerificationService.confirmationThreshold) {
+      _addTimelineEvent(
+        reportId: report.reportId,
+        title: 'Community Verified',
+        description:
+            '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
+        actorName: 'Community',
+        actorRole: 'Citizen Verification',
+        status: FaultStatus.completed,
+      );
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> submitCommunityDispute({
+    required ReportModel report,
+    required UserModel voter,
+    required String reason,
+    Uint8List? evidenceBytes,
+    String? contentType,
+    double? userLatitude,
+    double? userLongitude,
+    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+  }) async {
+    if (reason.trim().isEmpty) {
+      throw const ValidationException('A dispute reason is required.');
+    }
+
+    final alreadyVoted = hasUserVotedOnReport(
+      reportId: report.reportId,
+      userUid: voter.uid,
+    );
+
+    final eligibility = CommunityVerificationService.checkEligibility(
+      report: report,
+      user: voter,
+      userLatitude: userLatitude,
+      userLongitude: userLongitude,
+      hasAlreadyVoted: alreadyVoted,
+      radiusKm: radiusKm,
+    );
+
+    if (!eligibility.isEligible) {
+      throw ValidationException(
+        eligibility.reason ?? 'You are not eligible to dispute this repair.',
+      );
+    }
+
+    final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+    if (index == -1) {
+      throw const DatabaseException('Report not found.');
+    }
+
+    final currentReport = _reports[index];
+    final newDisputeCount = currentReport.disputeCount + 1;
+
+    String? evidenceUrl;
+    if (evidenceBytes != null && evidenceBytes.isNotEmpty) {
+      if (evidenceBytes.length > 10 * 1024 * 1024) {
+        throw const ValidationException(
+          'Choose an evidence photo smaller than 10 MB.',
+        );
+      }
+      evidenceUrl = await _communityVerificationGateway.uploadDisputePhoto(
+        reportId: report.reportId,
+        voterUid: voter.uid,
+        bytes: evidenceBytes,
+        contentType: contentType ?? 'image/jpeg',
+      );
+    }
+
+    final dispute = DisputeRecordModel(
+      voterUid: voter.uid,
+      voterName: voter.displayName,
+      reportId: report.reportId,
+      reason: reason.trim(),
+      evidenceImageUrl: evidenceUrl,
+      createdAt: DateTime.now(),
+    );
+
+    final activity = ActivityTimelineEvent(
+      id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+      reportId: report.reportId,
+      title: 'Dispute Raised',
+      description:
+          'A dispute has been raised by ${voter.displayName}. Reason: "${reason.trim()}". Status reopened for Admin review.',
+      actorName: voter.displayName,
+      actorRole: 'Citizen Dispute',
+      status: FaultStatus.disputed,
+      timestamp: DateTime.now(),
+    );
+
+    await _communityVerificationGateway.submitDispute(
+      report: currentReport,
+      dispute: dispute,
+      activity: activity,
+      newDisputeCount: newDisputeCount,
+    );
+
+    // Update in-memory state: auto-reopens report to disputed
+    _reportDisputes.putIfAbsent(report.reportId, () => []).add(dispute);
+    _reports[index] = currentReport.copyWith(
+      status: FaultStatus.disputed,
+      disputeCount: newDisputeCount,
+      updatedAt: DateTime.now(),
+    );
+
+    _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+    // Create a notification for dispute
+    _notifications.insert(
+      0,
+      NotificationItem(
+        id: 'notif-${DateTime.now().millisecondsSinceEpoch}',
+        recipientUid: voter.uid,
+        title: 'Dispute Opened',
+        body:
+            'A dispute has been raised on ${report.reportId}. Admin is reviewing.',
+        reportId: report.reportId,
+        type: 'dispute',
+        isRead: false,
+        createdAt: DateTime.now(),
+      ),
+    );
+
     notifyListeners();
   }
 }
