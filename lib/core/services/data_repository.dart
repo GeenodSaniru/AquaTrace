@@ -7,6 +7,11 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../constants/fault_constants.dart';
 import '../errors/app_exception.dart';
+import '../../features/notifications/services/backend_session.dart';
+import '../../features/notifications/services/demo_notifications.dart';
+import '../../features/notifications/services/in_memory_notification_gateway.dart';
+import '../../features/notifications/services/notification_gateway.dart';
+import '../../features/notifications/services/notification_store.dart';
 import '../models/activity_timeline_event.dart';
 import '../models/mock_data.dart';
 import '../models/notification_item.dart';
@@ -22,9 +27,11 @@ import 'technician_job_gateway.dart';
 class DataRepository with ChangeNotifier {
   final ReportSubmissionGateway _reportSubmissionGateway;
   final TechnicianJobGateway _technicianJobGateway;
+  final NotificationGateway _notificationGateway;
+  late final NotificationStore _notificationStore;
   final List<ReportModel> _reports = [];
-  final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
+  static int _activitySequence = 0;
   final Set<String> _submissionsInFlight = {};
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
@@ -32,7 +39,7 @@ class DataRepository with ChangeNotifier {
   String? _reportsErrorMessage;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
-  List<NotificationItem> get notifications => List.unmodifiable(_notifications);
+  List<NotificationItem> get notifications => _notificationStore.items;
   bool get isReportsLoading => _reportsLoading;
   String? get reportsError => _reportsErrorMessage;
   bool get reportsLoading => _reportsLoading;
@@ -42,10 +49,18 @@ class DataRepository with ChangeNotifier {
     ReportSubmissionGateway? reportSubmissionGateway,
     @visibleForTesting List<ReportModel>? initialReports,
     TechnicianJobGateway? technicianJobGateway,
+    NotificationGateway? notificationGateway,
   }) : _reportSubmissionGateway =
            reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
        _technicianJobGateway =
-           technicianJobGateway ?? FirebaseTechnicianJobGateway() {
+           technicianJobGateway ?? FirebaseTechnicianJobGateway(),
+       _notificationGateway =
+           notificationGateway ??
+           (FirebaseService.isRealFirebase
+               ? FirebaseNotificationGateway()
+               : InMemoryNotificationGateway(seed: DemoNotifications.build())) {
+    _notificationStore = NotificationStore(gateway: _notificationGateway)
+      ..addListener(notifyListeners);
     if (initialReports != null) {
       _reports.addAll(initialReports);
     } else {
@@ -59,7 +74,6 @@ class DataRepository with ChangeNotifier {
   void _initialize() {
     if (!FirebaseService.isRealFirebase) {
       _reports.addAll(MockData.initialReports);
-      _notifications.addAll(MockData.initialNotifications);
       _reportTimelines['AT-2026-00124'] = List.from(
         MockData.activityTimelineFor124,
       );
@@ -278,6 +292,9 @@ class DataRepository with ChangeNotifier {
   void dispose() {
     _authSubscription?.cancel();
     _reportsSubscription?.cancel();
+    _notificationStore
+      ..removeListener(notifyListeners)
+      ..dispose();
     super.dispose();
   }
 
@@ -620,6 +637,37 @@ class DataRepository with ChangeNotifier {
     return _reportTimelines[reportId] ?? [];
   }
 
+  /// Live, chronologically ordered (oldest first) audit trail for [reportId].
+  ///
+  /// With a real Firebase session this streams `/reports/{id}/activity`;
+  /// otherwise (demo mode) it re-emits the local timeline whenever it changes.
+  Stream<List<ActivityTimelineEvent>> watchReportHistory(String reportId) {
+    if (FirebaseService.isRealFirebase &&
+        FirebaseAuth.instance.currentUser != null) {
+      return _notificationGateway.watchActivity(reportId);
+    }
+    late final StreamController<List<ActivityTimelineEvent>> controller;
+    void emit() {
+      if (!controller.isClosed) {
+        controller.add(
+          sortActivityChronologically(getTimelineForReport(reportId)),
+        );
+      }
+    }
+
+    controller = StreamController<List<ActivityTimelineEvent>>(
+      onListen: () {
+        addListener(emit);
+        emit();
+      },
+      onCancel: () {
+        removeListener(emit);
+        return controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
   void _addTimelineEvent({
     required String reportId,
     required String title,
@@ -631,7 +679,10 @@ class DataRepository with ChangeNotifier {
     final list = _reportTimelines.putIfAbsent(reportId, () => []);
     list.add(
       ActivityTimelineEvent(
-        id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+        // Unique even for events created within the same clock tick, so a
+        // second event can never overwrite (and, under the append-only rules,
+        // be rejected as an update of) an earlier audit entry.
+        id: 'act-${DateTime.now().microsecondsSinceEpoch}-${_activitySequence++}',
         reportId: reportId,
         title: title,
         description: description,
@@ -657,21 +708,25 @@ class DataRepository with ChangeNotifier {
 
   // --- Notifications ---
 
-  int get unreadNotificationCount =>
-      _notifications.where((n) => !n.isRead).length;
+  /// The signed-in user's inbox (loading / error / action-error state).
+  NotificationStore get notificationStore => _notificationStore;
 
-  Future<void> markNotificationAsRead(String id) async {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index != -1) {
-      _notifications[index] = _notifications[index].copyWith(isRead: true);
-      notifyListeners();
-    }
+  int get unreadNotificationCount => _notificationStore.unreadCount;
+
+  /// Binds the notification inbox to the signed-in user (`null` = signed out).
+  ///
+  /// With Firebase configured, only a real Firebase Auth session for [uid]
+  /// loads notifications; demo-role identities get empty state rather than a
+  /// permission-denied error (see [hasBackendSession]).
+  void bindNotificationUser(String? uid) {
+    _notificationStore.bindUser(
+      uid != null && hasBackendSession(uid) ? uid : null,
+    );
   }
 
-  Future<void> markAllNotificationsAsRead() async {
-    for (int i = 0; i < _notifications.length; i++) {
-      _notifications[i] = _notifications[i].copyWith(isRead: true);
-    }
-    notifyListeners();
-  }
+  Future<void> markNotificationAsRead(String id) =>
+      _notificationStore.markAsRead(id);
+
+  Future<void> markAllNotificationsAsRead() =>
+      _notificationStore.markAllAsRead();
 }

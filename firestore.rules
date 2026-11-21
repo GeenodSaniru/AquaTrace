@@ -5,7 +5,8 @@ rules_version = '2';
  *
  * Collections (from README / Dart models):
  *   /users/{uid}
- *   /users/{uid}/notifications/{notificationId}
+ *   /users/{uid}/notifications/{notificationId}   // server-created, owner marks read
+ *   /users/{uid}/fcmTokens/{token}                // owner-managed push tokens
  *   /reports/{reportId}
  *   /reports/{reportId}/activity/{activityId}
  *   /reports/{reportId}/verifications/{voterUid}   // planned Member 7
@@ -110,10 +111,6 @@ service cloud.firestore {
       ];
     }
 
-    function validNotificationType(type) {
-      return type in ['assignment', 'verification', 'approval', 'dispute', 'update'];
-    }
-
     // --------------------------------------------------------------------------
     // /users/{uid}
     // --------------------------------------------------------------------------
@@ -188,12 +185,45 @@ service cloud.firestore {
           && onlyChanging(['isRead'])
           && request.resource.data.isRead is bool;
 
-        // Notification creation is a trusted server/admin action (assignment, disputes).
-        allow create: if isAdmin()
-          && request.resource.data.recipientUid == uid
-          && validNotificationType(request.resource.data.type);
+        // Notifications are created ONLY by trusted backend code (Cloud
+        // Functions / Admin SDK, which bypass these rules). No client - not
+        // even an admin - may create one, so a client can never send itself
+        // (or anyone else) a notification. See functions/README.md.
+        allow create: if false;
 
         allow delete: if isSelf(uid) || isAdmin();
+      }
+
+      // ------------------------------------------------------------------------
+      // /users/{uid}/fcmTokens/{token}  - push device tokens (Member 8)
+      //
+      // The owner registers / refreshes / removes their own device tokens.
+      // The document id IS the token. The backend (Admin SDK) reads them to
+      // address pushes; clients can only read their own.
+      // ------------------------------------------------------------------------
+      match /fcmTokens/{token} {
+        allow read: if isSelf(uid);
+
+        allow create: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'token',
+            'platform',
+            'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.token == token
+          && request.resource.data.platform in ['android', 'ios', 'macos']
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isSelf(uid)
+          && request.resource.data.token == resource.data.token
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.platform in ['android', 'ios', 'macos']
+          && request.resource.data.updatedAt == request.time
+          && onlyChanging(['platform', 'updatedAt']);
+
+        allow delete: if isSelf(uid);
       }
     }
 
@@ -342,7 +372,12 @@ service cloud.firestore {
       // Activity timeline (append-mostly audit trail)
       // ------------------------------------------------------------------------
       match /activity/{activityId} {
-        allow read: if isSignedIn();
+        // Same audience as the parent report: admins, citizens, and the
+        // technician assigned to it - so history cannot leak a report the
+        // reader could not open.
+        allow read: if isAdmin()
+          || isCitizen()
+          || isAssignedTechnician(reportDoc(reportId).data);
 
         // Actors may append a timeline event for actions they are allowed to take.
         allow create: if isSignedIn()

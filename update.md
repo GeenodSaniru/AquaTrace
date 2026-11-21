@@ -1,5 +1,69 @@
 # AquaTrace — Update Log
 
+## 2026-11-21 11:04:29 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8A: notifications, FCM client and report activity history
+
+Branch: `feature/notifications-history` (from `main` @ `353ee30`). Module code: `lib/features/notifications/`.
+
+### Preflight
+- Read `README.md`, `docs/MEMBER1_HANDOFF.md`, `AquaTrace_Member_Prompts.md`, this file, `firestore.rules`, `pubspec.yaml`, and the data/auth/router/shell code.
+- UI PDF located at `docs/AquaTrace UI.pdf`. The PDF is one Figma frame; I inspected the rendered contact sheet (`docs/ui_overview.png`, `docs/crop_*.png`) plus `docs/ui_pdf_extracted_text.txt` for the citizen / technician / admin **Notifications** ("New 2" / "Earlier", "Mark all read"), admin **Activity History** timeline, and the dashboard bell badge. I did not invent screens beyond those.
+- Baseline before changes: `flutter analyze` clean; `flutter test` 70/70.
+
+### Completed
+- **Notification list** (`shared_notifications_view.dart`): New / Earlier sections with unread count, unread dot, relative timestamps (tooltip = full date), loading / empty / error+retry states, semantics labels, tap = mark read + open the related report/job, "Mark all read".
+- **State** (`NotificationStore`, `NotificationGateway`): live Firestore stream of `/users/{uid}/notifications` (newest first, limit 100); optimistic mark-one / mark-all (batched) with rollback + user message on failure; no redundant writes; inbox is cleared on user change (no leaking between accounts). `DataRepository` keeps its existing notification API and delegates to the store.
+- **Deep links**: new routes `/reports/detail` and `/reports/activity`. `ReportLinkScreen` resolves the report from the signed-in user's own data: assigned technician → existing Job Details; everyone else → Activity History; invalid id / signed out / deleted or inaccessible report → explicit "unavailable" state. Ids from payloads are validated (`sanitizeReportId`).
+- **Report activity history** (`ActivityHistoryScreen`): chronological audit trail (oldest first, stable tie-break), design-faithful timeline (icon, `24 Sep 2026 – 10:32 AM`, title, description, actor), status badge, and the "Community Verified ✓" card driven by the real `verificationCount`. Admin **Activity** tab is now a report picker (`ActivityHubView`) → history (previously it duplicated the notification list).
+- **FCM client** (`PushMessagingService`, `firebase_messaging ^17.1.0`): user-initiated permission request (never automatic), token register / refresh (old token removed) / remove at `/users/{uid}/fcmTokens/{token}`, removal + device-token invalidation **before sign-out** (`AuthProvider.beforeSignOut` hook) and when the user switches the "Push Notifications" preference off, foreground in-app banner, background/terminated tap + cold-start handling (pending link opens after sign-in), permission banner (enable / blocked→open settings / registration problem→retry). Web/desktop and demo mode report "unsupported" and register nothing.
+- **Trusted notification creation**: `firestore.rules` now denies **every** client create on notifications (previously any admin client could); clients may only flip `isRead`. New `functions/` reference Cloud Functions (`onReportCreated`, `onReportUpdated`) + pure decision logic for: report approved/verified, technician assigned, repair started/completed, dispute opened, new-report admin alert. Deterministic notification ids make trigger retries idempotent. Full contract in `functions/README.md`.
+- **Rules**: owner-managed `fcmTokens` rules; activity read narrowed to the same audience as the parent report (admin / citizen / assigned technician).
+- **Platform config**: Android `POST_NOTIFICATIONS`; iOS `UIBackgroundModes: remote-notification`; `firebase.json` `functions` block; README §4.4/4.5/6.2a.
+- **Demo data**: with Firebase *not* configured, each demo role gets its own notifications (labelled demo data in code). With Firebase configured, demo identities have no Auth session → empty inbox, no token (same rule as reports).
+
+### Bugs found and fixed
+- `NotificationItem.fromMap` / `ActivityTimelineEvent.fromMap` turned a Firestore **Timestamp** into "now" (so every server-written notification would show "just now" and mis-order). Now parsed correctly; missing/invalid times are "unknown" (labelled "Time unavailable", sorted last) instead of fabricated.
+- Relative time showed "0m ago" and could go negative with clock skew → "Just now".
+- Activity event ids used millisecond precision → two events in one tick overwrote each other (and would be rejected by the append-only rules). Now unique.
+- Header bell: the unread badge sat on top of the bell and **swallowed taps** (found while verifying in the browser). Badge is now `IgnorePointer`; tooltip announces the unread count.
+- Header bar: three-line header (admin dashboard) overflowed by 2 px → taller `preferredSize` when `secondarySubtitle` is set.
+- My own regression, caught in QA: moving the admin "Activity" tab onto tab 3 broke the dashboard bell (it called `onNavigateTab(3)`). The bell now opens the notification list.
+
+### Files changed
+New: `lib/features/notifications/{notification_navigation.dart, presentation/{activity_history_screen,notification_formatters,push_permission_banner,report_link_screen}.dart, services/*.dart}`, `lib/core/models/firestore_time.dart`, `functions/*`, `test/notifications_unit_test.dart`, `test/notifications_widget_test.dart`, `test/support/notification_fakes.dart`.
+Modified (Member 8 module): `shared_notifications_view.dart`, `notification_item.dart`, `activity_timeline_event.dart`, `firestore.rules`, `README.md`.
+Modified (**shared files — owners please review**, all minimal/additive): `lib/main.dart` (wiring, `scaffoldMessengerKey`), `lib/core/services/data_repository.dart` (notification section, `watchReportHistory`, unique activity ids), `lib/core/navigation/app_router.dart` (+2 routes), `lib/core/navigation/navigation_service.dart` (+`messengerKey`), `lib/features/auth/providers/auth_provider.dart` (+`beforeSignOut`), `lib/features/admin/presentation/admin_main_shell.dart` (Activity tab + bell), `lib/core/widgets/app_header_bar.dart` (badge / tooltip / height), `test/widget_test.dart` (one assertion: the inbox is per signed-in user), `pubspec.yaml` / `pubspec.lock`, `macos/Flutter/GeneratedPluginRegistrant.swift` (regenerated by adding the plugin), `firebase.json`, `android/.../AndroidManifest.xml`, `ios/Runner/Info.plist`.
+
+### Checks run (all on this machine, 2026-11-21, Windows 11, Flutter 3.47.4 / Dart 3.13.3, Node v24.19.0)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 77 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **150/150** (70 existing + 46 unit + 34 widget) |
+| `npm test` (in `functions/`, `node --test`) | Pass — **14/14** (notification decision logic) |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated |
+| `git diff --check` | Pass (only LF→CRLF notices) |
+| Browser run, real `lib/main.dart` release build (Firebase configured) | Pass — app starts, `firebase_messaging` plugin loads, no console errors; demo citizen sees the empty Alerts state (no Auth session) |
+| Browser run, demo-mode preview (temporary entrypoint, **not committed**) | Pass — citizen: New 2 / Earlier, unread dots, tap marks read + opens Activity History (timeline order + Community Verified card), Mark all read, sign-out hook; admin: bell badge 2 → notification list, Activity tab hub |
+
+Test coverage highlights: permission denied / granted / unsupported / plugin failure; token register, refresh, removal on sign-out / preference off / account switch; no token for demo identities; deep links from list, push tap, cold start (pending until sign-in), foreground banner action, malformed ids; read / unread / mark-all incl. failure rollback; history ordering (incl. unknown times and live append); Timestamp vs ISO parsing.
+
+### NOT done / blockers (be explicit — nothing below is claimed to work)
+- **Push is not verified end to end.** No Android/iOS device or emulator was available; FCM permission, token delivery, foreground/background rendering and cold-start taps are covered by fakes and by code review only, not on hardware.
+- **`functions/` is not deployed and not run in the Firebase emulator.** Needs: `cd functions && npm install`, set region to match the Firestore location, Blaze plan, `firebase deploy --only functions`. Until then no server-side notification or push is produced in the live project.
+- **`firestore.rules` changes are not deployed and not emulator-tested** (no Java/Firebase CLI on this machine). Deploy + Rules Playground check required (notable: client create on notifications is now denied; `fcmTokens` rules; narrower activity read).
+- iOS/macOS: needs an APNs auth key uploaded in Firebase Console and the Push Notifications capability / `aps-environment` entitlement (Apple Developer team) — not committed. Web push (service worker + VAPID key) is not configured.
+- The deprecated-but-supported FCM token API (`getToken` / `onTokenRefresh` / `deleteToken`) is used on purpose; `firebase_messaging` 17 offers `register()` / `onRegistered` (Installation-ID based). Migrating needs a matching backend change.
+- Events only the server can know (**community verified**, **dispute opened** activity entries) are Member 7's to append; the contract is in `functions/README.md`.
+- Left for 8B/8C: per-category notification preferences wired to delivery, payload privacy review on real devices, duplicate-delivery checks against a live backend.
+
+### Notes for other members
+- Member 2: Settings still says push is "not connected" — it is now partially connected (the Push Notifications switch registers / removes this device's token). Copy not changed (your module).
+- Member 5: pre-existing debug assertion "ListTile background color or ink splashes may be invisible" from the admin dashboard quick actions (ListTile inside a coloured `DecoratedBox`); not changed.
+- Member 6 / 7: link to `AppRouter.reportDetail` / `AppRouter.reportActivity` with the report id to reuse the deep-link destinations.
+
+### Git
+- Committed on `feature/notifications-history`; only Member 8 task files staged (the temporary preview entrypoint was deleted, not committed). The commit hash and push result are reported in the hand-off message (a log entry cannot contain its own hash).
+
 ## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
 
 ### Completed

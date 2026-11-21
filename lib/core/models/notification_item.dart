@@ -1,3 +1,40 @@
+import 'firestore_time.dart';
+
+/// Event categories carried by `/users/{uid}/notifications/{id}.type`.
+///
+/// The string values are part of the shared Firestore contract and the
+/// Firestore rules allow-list; do not rename them.
+enum NotificationType {
+  /// A technician was assigned to a report / job.
+  assignment('assignment'),
+
+  /// A completed repair needs (or received) community verification.
+  verification('verification'),
+
+  /// An administrator approved / verified a report.
+  approval('approval'),
+
+  /// A dispute was opened on a repair.
+  dispute('dispute'),
+
+  /// Any other repair or report status update.
+  update('update');
+
+  const NotificationType(this.value);
+
+  /// Value stored in Firestore.
+  final String value;
+
+  /// Parses a stored value; unknown values degrade to [update] so a newer
+  /// backend never breaks an older client.
+  static NotificationType fromString(String? value) {
+    for (final type in NotificationType.values) {
+      if (type.value == value) return type;
+    }
+    return NotificationType.update;
+  }
+}
+
 /// In-app notification model representing `/users/{uid}/notifications/{id}`.
 class NotificationItem {
   final String id;
@@ -19,6 +56,12 @@ class NotificationItem {
     this.isRead = false,
     required this.createdAt,
   });
+
+  /// Typed view of [type].
+  NotificationType get notificationType => NotificationType.fromString(type);
+
+  /// False when the stored document had no usable timestamp.
+  bool get hasKnownTime => isKnownTime(createdAt);
 
   Map<String, dynamic> toMap() {
     return {
@@ -43,11 +86,9 @@ class NotificationItem {
       title: map['title'] as String? ?? '',
       body: map['body'] as String? ?? '',
       reportId: map['reportId'] as String? ?? '',
-      type: map['type'] as String? ?? 'update',
+      type: map['type'] as String? ?? NotificationType.update.value,
       isRead: map['isRead'] as bool? ?? false,
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: parseFirestoreTime(map['createdAt']) ?? unknownTime,
     );
   }
 

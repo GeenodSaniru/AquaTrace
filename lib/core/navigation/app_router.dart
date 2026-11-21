@@ -6,6 +6,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/citizen/presentation/citizen_main_shell.dart';
 import '../../features/map/presentation/shared_map_view.dart';
+import '../../features/notifications/presentation/activity_history_screen.dart';
+import '../../features/notifications/presentation/report_link_screen.dart';
 import '../../features/notifications/presentation/shared_notifications_view.dart';
 import '../../features/profile/presentation/shared_profile_view.dart';
 import '../../features/reports/presentation/citizen_report_form_screen.dart';
@@ -31,8 +33,33 @@ class AppRouter {
   static const String profile = '/profile';
   static const String reportFault = '/reports/new';
 
+  /// Report / job detail reached from a notification or push message.
+  /// `arguments`: the report id (`String`).
+  static const String reportDetail = '/reports/detail';
+
+  /// Activity history of one report. `arguments`: the report id (`String`).
+  static const String reportActivity = '/reports/activity';
+
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
+      case reportDetail:
+        return MaterialPageRoute(
+          builder: (_) => ReportLinkScreen(
+            reportId: settings.arguments is String
+                ? settings.arguments! as String
+                : '',
+          ),
+          settings: settings,
+        );
+      case reportActivity:
+        return MaterialPageRoute(
+          builder: (_) => ActivityHistoryScreen(
+            reportId: settings.arguments is String
+                ? settings.arguments! as String
+                : '',
+          ),
+          settings: settings,
+        );
       case login:
         return MaterialPageRoute(
           builder: (_) => const LoginScreen(),

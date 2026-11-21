@@ -126,9 +126,22 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Optional cleanup that must run while the session is still valid, e.g.
+  /// removing this device's push token from the signed-in user's account.
+  /// Failures never block sign-out.
+  Future<void> Function()? beforeSignOut;
+
   Future<void> signOut() async {
     _setLoading(true);
     try {
+      final cleanup = beforeSignOut;
+      if (cleanup != null) {
+        try {
+          await cleanup();
+        } on Object catch (error) {
+          debugPrint('[AquaTrace] Pre-sign-out cleanup failed: $error');
+        }
+      }
       await _authService.signOut();
       _currentUser = null;
     } finally {

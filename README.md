@@ -26,6 +26,7 @@ Municipal water pipe failures often suffer from delayed reporting, vague fault d
 | **Backend & Cloud** | Firebase Core & Cloud Firestore | Real-time database & document storage |
 | **Authentication** | Firebase Authentication | Email/password & role-aware session management |
 | **Media Storage** | Firebase Storage | Before-and-after photographic evidence |
+| **Push Notifications** | Firebase Cloud Messaging (`firebase_messaging`) | Report / job alerts (Android, iOS, macOS) |
 | **Mapping Engine** | OpenStreetMap (`flutter_map` + `latlong2`) | Free, tile-based interactive map visualization |
 | **Location Services** | `geolocator` | GPS coordinate retrieval & proximity verification |
 | **Camera & Media** | `image_picker` | Photo capture for leaks and repair proof |
@@ -182,9 +183,23 @@ All team members must conform to these shared document collections:
   "reportId": "AT-2026-00124",
   "type": "assignment", // assignment | verification | approval | dispute | update
   "isRead": false,
-  "createdAt": "2026-11-03T11:15:00.000Z"
+  "createdAt": "2026-11-03T11:15:00.000Z" // backend writes a Firestore Timestamp; the app reads either
 }
 ```
+
+* Notifications are **created only by trusted backend code** (Cloud Functions / Admin SDK). `firestore.rules` rejects every client create; clients may only flip `isRead`. See [`functions/README.md`](functions/README.md) for the trigger contract.
+* `createdAt` should be a Firestore `Timestamp` (server time). The client query orders by it and the app tolerates legacy ISO strings when *reading*.
+
+### 4.5 `/users/{uid}/fcmTokens/{token}` (push device tokens)
+```json
+{
+  "token": "<same as document id>",
+  "platform": "android", // android | ios | macos
+  "createdAt": "<server timestamp>",
+  "updatedAt": "<server timestamp>"
+}
+```
+Owner-managed (rules: only the signed-in user can read/create/update/delete their own tokens); read by the backend (Admin SDK) to send pushes.
 
 ---
 
@@ -238,6 +253,20 @@ Console / cloud hardening status (Member 1):
 - **Bootstrap staff**: `admin@aquatrace.lk` (admin) and `tech@aquatrace.lk` (technician) seeded; passwords live only in gitignored `scripts/.seed_credentials.local.json` (change on first login).
 - Enable **Storage** / **FCM** when Members 3/8 need them.
 - Re-run hardening after SHA changes: `python3 scripts/member1_cloud_hardening.py <ANDROID_SHA1>`.
+
+### 6.2a Notifications, push and report history (Member 8)
+Code: `lib/features/notifications/`. Backend reference: `functions/`.
+
+| Piece | Status |
+|---|---|
+| Notification list (New / Earlier, unread dot, mark one / mark all read, relative timestamps, tap → related report/job) | Implemented, tested |
+| Activity history timeline per report (`/reports/{id}/activity`, chronological) + admin *Activity* tab | Implemented, tested |
+| FCM client: permission prompt (user-initiated), token register / refresh / remove, foreground banner, tap/cold-start deep links | Implemented, unit tested with fakes; **not verified on a device** |
+| Server-side notification creation + push sending (`functions/`) | Reference code written; decision logic unit tested (`npm test`); **not deployed, not emulator-tested** |
+
+Push works end to end only after the backend checklist in [`functions/README.md`](functions/README.md) is done (deploy functions on the Blaze plan, deploy `firestore.rules`, add an APNs key for iOS/macOS). Web push is not configured. The deprecated-but-supported FCM token API is used on purpose (see the comment in `push_messaging_service.dart`).
+
+With Firebase configured, demo-role sign-in has no Firebase Auth session, so the inbox is empty and no push token is registered for demo identities (consistent with the reports rule above). Demo notifications appear only when Firebase is **not** configured.
 
 ### 6.3 Google / Apple sign-in (not wired)
 UI buttons remain visible per the design PDF but are **gracefully disabled** until:
