@@ -777,8 +777,10 @@ class DataRepository with ChangeNotifier {
   List<ReportModel> getCompletedReportsNearby({
     required double latitude,
     required double longitude,
-    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+    double? radiusKm,
   }) {
+    final effectiveRadiusKm =
+        radiusKm ?? CommunityVerificationService.defaultRadiusKm;
     return _reports.where((report) {
       if (report.status != FaultStatus.completed) return false;
       final dist = CommunityVerificationService.calculateDistanceKm(
@@ -787,7 +789,7 @@ class DataRepository with ChangeNotifier {
         endLatitude: report.latitude,
         endLongitude: report.longitude,
       );
-      return dist <= radiusKm;
+      return dist <= effectiveRadiusKm;
     }).toList();
   }
 
@@ -797,87 +799,153 @@ class DataRepository with ChangeNotifier {
     String? note,
     double? userLatitude,
     double? userLongitude,
-    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+    double radiusKm = 0,
   }) async {
-    final alreadyVoted = hasUserVotedOnReport(
-      reportId: report.reportId,
-      userUid: voter.uid,
-    );
+    final effectiveRadius = radiusKm > 0
+        ? radiusKm
+        : CommunityVerificationService.defaultRadiusKm;
 
-    final eligibility = CommunityVerificationService.checkEligibility(
-      report: report,
-      user: voter,
-      userLatitude: userLatitude,
-      userLongitude: userLongitude,
-      hasAlreadyVoted: alreadyVoted,
-      radiusKm: radiusKm,
-    );
-
-    if (!eligibility.isEligible) {
-      throw ValidationException(
-        eligibility.reason ?? 'You are not eligible to verify this repair.',
+    final submissionKey = 'verify_${report.reportId}_${voter.uid}';
+    if (_submissionsInFlight.contains(submissionKey)) {
+      throw const ValidationException(
+        'A verification submission is already in progress.',
       );
     }
+    _submissionsInFlight.add(submissionKey);
 
-    final index = _reports.indexWhere((r) => r.reportId == report.reportId);
-    if (index == -1) {
-      throw const DatabaseException('Report not found.');
-    }
-
-    final currentReport = _reports[index];
-    final newCount = currentReport.verificationCount + 1;
-    final vote = VerificationVoteModel(
-      voterUid: voter.uid,
-      voterName: voter.displayName,
-      reportId: report.reportId,
-      createdAt: DateTime.now(),
-      note: note,
-    );
-
-    final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().millisecondsSinceEpoch}',
-      reportId: report.reportId,
-      title: 'Community Verification Confirmed',
-      description:
-          '${voter.displayName} confirmed repair completion.${note != null && note.isNotEmpty ? ' Note: "$note"' : ''}',
-      actorName: voter.displayName,
-      actorRole: 'Citizen Verification',
-      status: FaultStatus.completed,
-      timestamp: DateTime.now(),
-    );
-
-    await _communityVerificationGateway.submitVerification(
-      report: currentReport,
-      vote: vote,
-      activity: activity,
-      newVerificationCount: newCount,
-    );
-
-    // Update in-memory state
-    _reportVerifications.putIfAbsent(report.reportId, () => []).add(vote);
-    _reports[index] = currentReport.copyWith(
-      verificationCount: newCount,
-      updatedAt: DateTime.now(),
-    );
-
-    _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
-
-    // If threshold reached, add milestone activity
-    if (newCount >= CommunityVerificationService.confirmationThreshold &&
-        currentReport.verificationCount <
-            CommunityVerificationService.confirmationThreshold) {
-      _addTimelineEvent(
+    try {
+      final alreadyVoted = hasUserVotedOnReport(
         reportId: report.reportId,
-        title: 'Community Verified',
+        userUid: voter.uid,
+      );
+
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: report,
+        user: voter,
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+        hasAlreadyVoted: alreadyVoted,
+        radiusKm: effectiveRadius,
+      );
+
+      if (!eligibility.isEligible) {
+        throw ValidationException(
+          eligibility.reason ?? 'You are not eligible to verify this repair.',
+        );
+      }
+
+      final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+      if (index == -1) {
+        throw const DatabaseException('Report not found.');
+      }
+
+      final currentReport = _reports[index];
+      final newCount = currentReport.verificationCount + 1;
+      final vote = VerificationVoteModel(
+        voterUid: voter.uid,
+        voterName: voter.displayName,
+        reportId: report.reportId,
+        createdAt: DateTime.now(),
+        note: note,
+      );
+
+      final activity = ActivityTimelineEvent(
+        id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+        reportId: report.reportId,
+        title: 'Community Verification Confirmed',
         description:
-            '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
-        actorName: 'Community',
+            '${voter.displayName} confirmed repair completion.${note != null && note.isNotEmpty ? ' Note: "$note"' : ''}',
+        actorName: voter.displayName,
         actorRole: 'Citizen Verification',
         status: FaultStatus.completed,
+        timestamp: DateTime.now(),
       );
-    }
 
-    notifyListeners();
+      await _communityVerificationGateway.submitVerification(
+        report: currentReport,
+        vote: vote,
+        activity: activity,
+        newVerificationCount: newCount,
+      );
+
+      // Update in-memory state
+      _reportVerifications.putIfAbsent(report.reportId, () => []).add(vote);
+      _reports[index] = currentReport.copyWith(
+        verificationCount: newCount,
+        updatedAt: DateTime.now(),
+      );
+
+      _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+      // If threshold reached, add milestone activity and notify workflows (Member 8 coordination)
+      if (newCount >= CommunityVerificationService.confirmationThreshold &&
+          currentReport.verificationCount <
+              CommunityVerificationService.confirmationThreshold) {
+        _addTimelineEvent(
+          reportId: report.reportId,
+          title: 'Community Verified',
+          description:
+              '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
+          actorName: 'Community',
+          actorRole: 'Citizen Verification',
+          status: FaultStatus.completed,
+        );
+
+        // Notify Reporter
+        _notifications.insert(
+          0,
+          NotificationItem(
+            id: 'notif-${DateTime.now().millisecondsSinceEpoch}-rep-v',
+            recipientUid: currentReport.reporterUid,
+            title: 'Repair Verified',
+            body:
+                'Community confirmed resolution for your report ${report.reportId}.',
+            reportId: report.reportId,
+            type: 'verification',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+
+        // Notify Assigned Technician
+        if (currentReport.assignedTechnicianUid != null) {
+          _notifications.insert(
+            0,
+            NotificationItem(
+              id: 'notif-${DateTime.now().millisecondsSinceEpoch}-tech-v',
+              recipientUid: currentReport.assignedTechnicianUid!,
+              title: 'Repair Verified by Community',
+              body:
+                  '3 nearby citizens confirmed your repair on ${report.reportId} is complete.',
+              reportId: report.reportId,
+              type: 'verification',
+              isRead: false,
+              createdAt: DateTime.now(),
+            ),
+          );
+        }
+
+        // Notify Admin workflow
+        _notifications.insert(
+          0,
+          NotificationItem(
+            id: 'notif-${DateTime.now().millisecondsSinceEpoch}-adm-v',
+            recipientUid: MockData.adminUser.uid,
+            title: 'Repair Verified by Community',
+            body:
+                'Report ${report.reportId} reached the community verification threshold.',
+            reportId: report.reportId,
+            type: 'verification',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
+      notifyListeners();
+    } finally {
+      _submissionsInFlight.remove(submissionKey);
+    }
   }
 
   Future<void> submitCommunityDispute({
@@ -888,109 +956,178 @@ class DataRepository with ChangeNotifier {
     String? contentType,
     double? userLatitude,
     double? userLongitude,
-    double radiusKm = CommunityVerificationService.defaultRadiusKm,
+    double radiusKm = 0,
   }) async {
-    if (reason.trim().isEmpty) {
-      throw const ValidationException('A dispute reason is required.');
-    }
+    final effectiveRadius = radiusKm > 0
+        ? radiusKm
+        : CommunityVerificationService.defaultRadiusKm;
 
-    final alreadyVoted = hasUserVotedOnReport(
-      reportId: report.reportId,
-      userUid: voter.uid,
-    );
-
-    final eligibility = CommunityVerificationService.checkEligibility(
-      report: report,
-      user: voter,
-      userLatitude: userLatitude,
-      userLongitude: userLongitude,
-      hasAlreadyVoted: alreadyVoted,
-      radiusKm: radiusKm,
-    );
-
-    if (!eligibility.isEligible) {
-      throw ValidationException(
-        eligibility.reason ?? 'You are not eligible to dispute this repair.',
+    final submissionKey = 'dispute_${report.reportId}_${voter.uid}';
+    if (_submissionsInFlight.contains(submissionKey)) {
+      throw const ValidationException(
+        'A dispute submission is already in progress.',
       );
     }
+    _submissionsInFlight.add(submissionKey);
 
-    final index = _reports.indexWhere((r) => r.reportId == report.reportId);
-    if (index == -1) {
-      throw const DatabaseException('Report not found.');
-    }
+    try {
+      if (reason.trim().isEmpty) {
+        throw const ValidationException('A dispute reason is required.');
+      }
 
-    final currentReport = _reports[index];
-    final newDisputeCount = currentReport.disputeCount + 1;
+      final alreadyVoted = hasUserVotedOnReport(
+        reportId: report.reportId,
+        userUid: voter.uid,
+      );
 
-    String? evidenceUrl;
-    if (evidenceBytes != null && evidenceBytes.isNotEmpty) {
-      if (evidenceBytes.length > 10 * 1024 * 1024) {
-        throw const ValidationException(
-          'Choose an evidence photo smaller than 10 MB.',
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: report,
+        user: voter,
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+        hasAlreadyVoted: alreadyVoted,
+        radiusKm: effectiveRadius,
+      );
+
+      if (!eligibility.isEligible) {
+        throw ValidationException(
+          eligibility.reason ?? 'You are not eligible to dispute this repair.',
         );
       }
-      evidenceUrl = await _communityVerificationGateway.uploadDisputePhoto(
-        reportId: report.reportId,
+
+      final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+      if (index == -1) {
+        throw const DatabaseException('Report not found.');
+      }
+
+      final currentReport = _reports[index];
+      final newDisputeCount = currentReport.disputeCount + 1;
+
+      String? evidenceUrl;
+      if (evidenceBytes != null && evidenceBytes.isNotEmpty) {
+        if (evidenceBytes.length > 10 * 1024 * 1024) {
+          throw const ValidationException(
+            'Choose an evidence photo smaller than 10 MB.',
+          );
+        }
+        evidenceUrl = await _communityVerificationGateway.uploadDisputePhoto(
+          reportId: report.reportId,
+          voterUid: voter.uid,
+          bytes: evidenceBytes,
+          contentType: contentType ?? 'image/jpeg',
+        );
+      }
+
+      final dispute = DisputeRecordModel(
         voterUid: voter.uid,
-        bytes: evidenceBytes,
-        contentType: contentType ?? 'image/jpeg',
-      );
-    }
-
-    final dispute = DisputeRecordModel(
-      voterUid: voter.uid,
-      voterName: voter.displayName,
-      reportId: report.reportId,
-      reason: reason.trim(),
-      evidenceImageUrl: evidenceUrl,
-      createdAt: DateTime.now(),
-    );
-
-    final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().millisecondsSinceEpoch}',
-      reportId: report.reportId,
-      title: 'Dispute Raised',
-      description:
-          'A dispute has been raised by ${voter.displayName}. Reason: "${reason.trim()}". Status reopened for Admin review.',
-      actorName: voter.displayName,
-      actorRole: 'Citizen Dispute',
-      status: FaultStatus.disputed,
-      timestamp: DateTime.now(),
-    );
-
-    await _communityVerificationGateway.submitDispute(
-      report: currentReport,
-      dispute: dispute,
-      activity: activity,
-      newDisputeCount: newDisputeCount,
-    );
-
-    // Update in-memory state: auto-reopens report to disputed
-    _reportDisputes.putIfAbsent(report.reportId, () => []).add(dispute);
-    _reports[index] = currentReport.copyWith(
-      status: FaultStatus.disputed,
-      disputeCount: newDisputeCount,
-      updatedAt: DateTime.now(),
-    );
-
-    _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
-
-    // Create a notification for dispute
-    _notifications.insert(
-      0,
-      NotificationItem(
-        id: 'notif-${DateTime.now().millisecondsSinceEpoch}',
-        recipientUid: voter.uid,
-        title: 'Dispute Opened',
-        body:
-            'A dispute has been raised on ${report.reportId}. Admin is reviewing.',
+        voterName: voter.displayName,
         reportId: report.reportId,
-        type: 'dispute',
-        isRead: false,
+        reason: reason.trim(),
+        evidenceImageUrl: evidenceUrl,
         createdAt: DateTime.now(),
-      ),
-    );
+      );
 
-    notifyListeners();
+      final activity = ActivityTimelineEvent(
+        id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+        reportId: report.reportId,
+        title: 'Dispute Raised',
+        description:
+            'A dispute has been raised by ${voter.displayName}. Reason: "${reason.trim()}". Status reopened for Admin review.',
+        actorName: voter.displayName,
+        actorRole: 'Citizen Dispute',
+        status: FaultStatus.disputed,
+        timestamp: DateTime.now(),
+      );
+
+      await _communityVerificationGateway.submitDispute(
+        report: currentReport,
+        dispute: dispute,
+        activity: activity,
+        newDisputeCount: newDisputeCount,
+      );
+
+      // Update in-memory state: auto-reopens report to disputed
+      _reportDisputes.putIfAbsent(report.reportId, () => []).add(dispute);
+      _reports[index] = currentReport.copyWith(
+        status: FaultStatus.disputed,
+        disputeCount: newDisputeCount,
+        updatedAt: DateTime.now(),
+      );
+
+      _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+      // 1. Notify Admin workflow (Member 5 coordination)
+      _notifications.insert(
+        0,
+        NotificationItem(
+          id: 'notif-${DateTime.now().millisecondsSinceEpoch}-adm',
+          recipientUid: MockData.adminUser.uid,
+          title: 'Dispute Raised',
+          body:
+              'Dispute raised on ${report.reportId} by ${voter.displayName}. Case reopened for Admin review.',
+          reportId: report.reportId,
+          type: 'dispute',
+          isRead: false,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      // 2. Notify Assigned Technician
+      if (currentReport.assignedTechnicianUid != null) {
+        _notifications.insert(
+          0,
+          NotificationItem(
+            id: 'notif-${DateTime.now().millisecondsSinceEpoch}-tech',
+            recipientUid: currentReport.assignedTechnicianUid!,
+            title: 'Repair Disputed',
+            body:
+                'Completed repair on ${report.reportId} was disputed by the community and reopened for review.',
+            reportId: report.reportId,
+            type: 'dispute',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
+      // 3. Notify Original Reporter
+      if (currentReport.reporterUid.isNotEmpty &&
+          currentReport.reporterUid != voter.uid) {
+        _notifications.insert(
+          0,
+          NotificationItem(
+            id: 'notif-${DateTime.now().millisecondsSinceEpoch}-rep',
+            recipientUid: currentReport.reporterUid,
+            title: 'Dispute Opened',
+            body:
+                'A community dispute has been raised on your report ${report.reportId}. Admin is reviewing.',
+            reportId: report.reportId,
+            type: 'dispute',
+            isRead: false,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
+      // 4. Confirmation for voter
+      _notifications.insert(
+        0,
+        NotificationItem(
+          id: 'notif-${DateTime.now().millisecondsSinceEpoch}-voter',
+          recipientUid: voter.uid,
+          title: 'Dispute Submitted',
+          body:
+              'Your dispute on ${report.reportId} was submitted to the Water Board.',
+          reportId: report.reportId,
+          type: 'dispute',
+          isRead: false,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      notifyListeners();
+    } finally {
+      _submissionsInFlight.remove(submissionKey);
+    }
   }
 }

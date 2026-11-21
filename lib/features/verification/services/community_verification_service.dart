@@ -23,12 +23,41 @@ class VerificationEligibility {
 }
 
 /// Core domain logic and validation rules for Community Repair Verification.
+///
+/// **Verification & Dispute Assumptions:**
+/// 1. Proximity Radius (default: 5.0 km):
+///    Citizens must be within this geographic radius of the reported pipe coordinates
+///    to audit or dispute. In Sri Lanka municipal contexts (e.g. Colombo Municipal Council),
+///    5.0 km covers the neighborhood and contiguous water distribution segment.
+/// 2. Verification Threshold (default: 3 confirmations):
+///    A completed repair is marked "Community Verified" once 3 independent citizens
+///    confirm resolution.
+/// 3. Conflict of Interest:
+///    The original reporter and the assigned technician cannot submit community audit votes.
+/// 4. Lifecycle Reopening:
+///    A community dispute automatically reopens the report to [FaultStatus.disputed],
+///    creates an audit timeline event, and notifies admin, technician, and reporter workflows.
 class CommunityVerificationService {
+  static double _configuredRadiusKm = 5.0;
+  static int _configuredThreshold = 3;
+
   /// Default radius in kilometers within which citizens can verify completed repairs.
-  static const double defaultRadiusKm = 5.0;
+  static double get defaultRadiusKm => _configuredRadiusKm;
 
   /// Required number of community confirmations to reach "Community Verified" milestone.
-  static const int confirmationThreshold = 3;
+  static int get confirmationThreshold => _configuredThreshold;
+
+  /// Allows runtime configuration of verification assumptions (e.g., from settings or tests).
+  static void configure({double? radiusKm, int? threshold}) {
+    if (radiusKm != null && radiusKm > 0) _configuredRadiusKm = radiusKm;
+    if (threshold != null && threshold > 0) _configuredThreshold = threshold;
+  }
+
+  /// Resets verification parameters to project defaults (5.0 km radius, 3 confirmations threshold).
+  static void resetDefaults() {
+    _configuredRadiusKm = 5.0;
+    _configuredThreshold = 3;
+  }
 
   /// Calculates the great-circle distance between two GPS coordinates using the Haversine formula.
   static double calculateDistanceKm({
@@ -67,8 +96,9 @@ class CommunityVerificationService {
     required double? userLatitude,
     required double? userLongitude,
     required bool hasAlreadyVoted,
-    double radiusKm = defaultRadiusKm,
+    double? radiusKm,
   }) {
+    final effectiveRadiusKm = radiusKm ?? defaultRadiusKm;
     if (user == null) {
       return const VerificationEligibility(
         isEligible: false,
@@ -154,10 +184,10 @@ class CommunityVerificationService {
       endLongitude: report.longitude,
     );
 
-    final isWithinRadius = distanceKm <= radiusKm;
+    final isWithinRadius = distanceKm <= effectiveRadiusKm;
     if (!isWithinRadius) {
       final formattedDist = distanceKm.toStringAsFixed(1);
-      final formattedMax = radiusKm.toStringAsFixed(0);
+      final formattedMax = effectiveRadiusKm.toStringAsFixed(0);
       return VerificationEligibility(
         isEligible: false,
         reason:

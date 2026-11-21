@@ -398,6 +398,141 @@ void main() {
       final timeline = repository.getTimelineForReport('AT-TEST-002');
       expect(timeline.any((e) => e.title == 'Dispute Raised'), isTrue);
     });
+
+    test('submitting dispute dispatches notifications across admin, technician, reporter, and voter', () async {
+      final reportWithTech = completedReport.copyWith(
+        assignedTechnicianUid: 'tech-kasun-999',
+        assignedTechnicianName: 'Kasun Technician',
+      );
+      final testRepo = DataRepository(
+        initialReports: [reportWithTech],
+        communityVerificationGateway: mockGateway,
+      );
+
+      await testRepo.submitCommunityDispute(
+        report: reportWithTech,
+        voter: voter1,
+        reason: 'Water is still leaking after repair.',
+        userLatitude: 6.8912,
+        userLongitude: 79.8554,
+      );
+
+      final notifs = testRepo.notifications;
+      // 1. Admin notified
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'demo-admin-003' && n.type == 'dispute',
+        ),
+        isTrue,
+      );
+      // 2. Assigned Technician notified
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'tech-kasun-999' && n.type == 'dispute',
+        ),
+        isTrue,
+      );
+      // 3. Original Reporter notified
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'reporter-111' && n.type == 'dispute',
+        ),
+        isTrue,
+      );
+      // 4. Voter received submission confirmation
+      expect(
+        notifs.any((n) => n.recipientUid == voter1.uid && n.type == 'dispute'),
+        isTrue,
+      );
+    });
+
+    test('reaching verification threshold dispatches milestone notifications to reporter, technician, and admin', () async {
+      final reportWithTech = completedReport.copyWith(
+        assignedTechnicianUid: 'tech-kasun-999',
+        verificationCount: 2,
+      );
+      final testRepo = DataRepository(
+        initialReports: [reportWithTech],
+        communityVerificationGateway: mockGateway,
+      );
+
+      await testRepo.submitCommunityVerification(
+        report: reportWithTech,
+        voter: voter1,
+        note: 'Pavement is clean and dry.',
+        userLatitude: 6.8912,
+        userLongitude: 79.8554,
+      );
+
+      final notifs = testRepo.notifications;
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'reporter-111' && n.type == 'verification',
+        ),
+        isTrue,
+      );
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'tech-kasun-999' && n.type == 'verification',
+        ),
+        isTrue,
+      );
+      expect(
+        notifs.any(
+          (n) => n.recipientUid == 'demo-admin-003' && n.type == 'verification',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'admin can reassign a disputed report moving it into assigned status',
+      () async {
+        final disputedReport = completedReport.copyWith(
+          status: FaultStatus.disputed,
+        );
+        final testRepo = DataRepository(
+          initialReports: [disputedReport],
+          communityVerificationGateway: mockGateway,
+        );
+
+        await testRepo.assignTechnician(
+          reportId: disputedReport.reportId,
+          technicianUid: 'tech-new-007',
+          technicianName: 'Nimal Fernando',
+          adminName: 'Dilani Admin',
+          actorRole: 'admin',
+        );
+
+        final updated = testRepo.getReportById(disputedReport.reportId)!;
+        expect(updated.status, FaultStatus.assigned);
+        expect(updated.assignedTechnicianUid, 'tech-new-007');
+        expect(updated.assignedTechnicianName, 'Nimal Fernando');
+      },
+    );
+
+    test('verification radius and threshold can be configured and reset', () {
+      addTearDown(CommunityVerificationService.resetDefaults);
+
+      CommunityVerificationService.configure(radiusKm: 2.0, threshold: 5);
+      expect(CommunityVerificationService.defaultRadiusKm, 2.0);
+      expect(CommunityVerificationService.confirmationThreshold, 5);
+
+      // Check distance 3.5 km is rejected under 2.0 km radius
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: completedReport,
+        user: voter1,
+        userLatitude: 6.8912,
+        userLongitude: 79.8854, // ~3.3 km away
+        hasAlreadyVoted: false,
+      );
+      expect(eligibility.isEligible, isFalse);
+      expect(eligibility.isWithinRadius, isFalse);
+
+      CommunityVerificationService.resetDefaults();
+      expect(CommunityVerificationService.defaultRadiusKm, 5.0);
+      expect(CommunityVerificationService.confirmationThreshold, 3);
+    });
   });
 
   group('CitizenVerificationScreen Widget Tests', () {

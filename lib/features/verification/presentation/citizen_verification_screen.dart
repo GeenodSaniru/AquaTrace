@@ -531,7 +531,7 @@ class _CitizenVerificationScreenState extends State<CitizenVerificationScreen> {
     List disputes,
     bool isDark,
   ) {
-    const threshold = CommunityVerificationService.confirmationThreshold;
+    final threshold = CommunityVerificationService.confirmationThreshold;
     final isVerified = report.verificationCount >= threshold;
     final progress = (report.verificationCount / threshold).clamp(0.0, 1.0);
 

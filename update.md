@@ -1,5 +1,37 @@
 # AquaTrace — Update Log
 
+## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7B: Report Lifecycle Integration & Community Dispute Management
+
+### Completed
+- Completed Prompt 7B report lifecycle integration for community verification and disputes:
+  - Valid dispute handling: submitting a dispute against a completed repair automatically moves the case into `FaultStatus.disputed` (reopened), records an auditable timeline event in `activityTimeline`, and notifies:
+    - Admin workflow (`demo-admin-003`) for review and reassignment
+    - Assigned technician regarding the dispute on their completed repair
+    - Original reporter that their report has been disputed and reopened
+    - Disputing citizen confirming their dispute submission was recorded
+  - Successful verification: recorded with unique voter identity (`VerificationVoteModel`), double-counting prevented via atomic in-memory concurrency locks (`_submissionsInFlight`) and duplicate vote guards.
+  - Verification milestone notifications: upon reaching the 3-confirmation threshold, automatically dispatches milestone celebrations to original reporter, assigned technician, and admin workflow.
+  - Configurable parameters & documented assumptions:
+    - Proximity Radius: default 5.0 km (covers municipal contiguous water distribution segments in Sri Lanka, e.g. Colombo Municipal Council); runtime configurable via `CommunityVerificationService.configure(radiusKm: ...)`.
+    - Verification Threshold: default 3 confirmations (independent peer confirmations required for community verification milestone); runtime configurable via `CommunityVerificationService.configure(threshold: ...)`.
+    - Eligibility Assumptions: authenticated citizen role, reporter self-verification prohibited, assigned technician audit prohibited, completed status requirement, proximity radius requirement.
+  - Coordinated Admin dispute review with Member 5:
+    - Integrated community dispute counts, dispute reason/explanation cards, before/after evidence comparison, and a "View Community Verification Audit" CTA in `AdminReportsView`.
+    - Integrated with Member 8 notification system (`SharedNotificationsView`) routing directly to `/verify-repair`.
+- Executed QA suite: `dart format`, `flutter analyze` (0 issues), and `flutter test` across all unit and widget tests (including 16/16 verification tests).
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 16/16 tests green. |
+| `flutter test` | Pass — all tests green. |
+
+### Open Questions & Handoff Notes
+- In a production environment with multi-instance backend or Cloud Functions, `_submissionsInFlight` should be supplemented with Firestore transaction isolation rules and backend Cloud Functions triggers (already mirrored in `firestore.rules`).
+- Member 5's Admin workflow can reassign disputed reports to new technicians, which resets/progresses the report status appropriately as verified in `community_verification_test.dart`.
+
 ## 2026-11-17 23:35:51 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7A Section 3: Automated Verification Tests & Final QA
 
 ### Completed
