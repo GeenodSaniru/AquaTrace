@@ -1,5 +1,36 @@
 # AquaTrace — Update Log
 
+## 2026-11-21 09:35:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7C Section 1: Verification Regression Suite & Defect Hardening
+
+### Completed
+- Authored comprehensive verification regression test suite in `test/community_verification_test.dart` (expanded from 16 to 26 unit and widget tests):
+  - Unauthenticated user rejection: verifies `checkEligibility` blocks unauthenticated (`null`) users with clear sign-in guidance.
+  - Unavailable GPS / location coordinates: validates rejection when latitude or longitude is null.
+  - Dispute validation: enforces mandatory non-empty dispute reason and rejects oversized (>10 MB) evidence images.
+  - Stale / non-existent report resilience: throws `DatabaseException` when attempting verification or dispute on non-existent reports.
+  - Gateway & network error handling: verifies simulated network failures during Firestore or Storage writes do not leave local report states dirty, mutate vote counts, or leak in-flight concurrency locks.
+  - In-flight submission concurrency: verifies `_submissionsInFlight` lock prevents simultaneous parallel submissions for the same report and voter.
+  - Full end-to-end lifecycle verification:
+    - Initial completed report audited by nearby citizens.
+    - Confirmations 1 and 2 increment `verificationCount` with voter record persistence.
+    - 3rd confirmation automatically logs the `Community Verified` milestone and dispatches celebrations to reporter, technician, and admin.
+    - Subsequent citizen dispute reopens report to `FaultStatus.disputed` and alerts all stakeholders.
+    - Admin reviews dispute in `AdminReportsView` and reassigns report to a new technician, cleanly progressing status back to `FaultStatus.assigned`.
+  - Widget tests for `CitizenVerificationScreen`:
+    - Renders "Community Verified ✓" celebration badge when the 3-confirmation threshold is satisfied.
+    - Renders action buttons "Confirm Repair Resolution" and "Raise Dispute (Report Ongoing Issue)" for eligible citizens.
+- Verified zero static analysis defects and cleanly formatted code across the entire repository.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted (0 changes needed). |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+
+### Outstanding
+- Section 2: Full repository release build verification (`flutter build web --release`), complete repository test suite pass (104+ tests), final documentation of configured radius/threshold assumptions and unresolved backend dependencies, and handoff completion.
+
 ## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7B: Report Lifecycle Integration & Community Dispute Management
 
 ### Completed

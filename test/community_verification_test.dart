@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,8 @@ class MockCommunityVerificationGateway implements CommunityVerificationGateway {
   final List<VerificationVoteModel> recordedVotes = [];
   final List<DisputeRecordModel> recordedDisputes = [];
   final List<ActivityTimelineEvent> recordedActivities = [];
+  bool throwError = false;
+  Completer<void>? pendingCompleter;
 
   @override
   Future<void> submitVerification({
@@ -30,6 +33,12 @@ class MockCommunityVerificationGateway implements CommunityVerificationGateway {
     required ActivityTimelineEvent activity,
     required int newVerificationCount,
   }) async {
+    if (throwError) {
+      throw const NetworkException('Simulated network error');
+    }
+    if (pendingCompleter != null) {
+      await pendingCompleter!.future;
+    }
     recordedVotes.add(vote);
     recordedActivities.add(activity);
   }
@@ -41,6 +50,12 @@ class MockCommunityVerificationGateway implements CommunityVerificationGateway {
     required ActivityTimelineEvent activity,
     required int newDisputeCount,
   }) async {
+    if (throwError) {
+      throw const NetworkException('Simulated network error');
+    }
+    if (pendingCompleter != null) {
+      await pendingCompleter!.future;
+    }
     recordedDisputes.add(dispute);
     recordedActivities.add(activity);
   }
@@ -52,6 +67,9 @@ class MockCommunityVerificationGateway implements CommunityVerificationGateway {
     required Uint8List bytes,
     required String contentType,
   }) async {
+    if (throwError) {
+      throw const NetworkException('Simulated network upload failure');
+    }
     return 'https://storage.googleapis.com/aquatrace/dispute/$voterUid/$reportId.jpg';
   }
 }
@@ -277,6 +295,39 @@ void main() {
       expect(
         eligibility.reason,
         contains('Verification is only allowed within 5 km'),
+      );
+    });
+
+    test('rejects unauthenticated user (null user)', () {
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: testReport,
+        user: null,
+        userLatitude: 6.8912,
+        userLongitude: 79.8554,
+        hasAlreadyVoted: false,
+      );
+
+      expect(eligibility.isEligible, isFalse);
+      expect(
+        eligibility.reason,
+        contains('You must be signed in to verify repairs'),
+      );
+      expect(eligibility.isWithinRadius, isFalse);
+    });
+
+    test('rejects when GPS or location coordinates are unavailable (null)', () {
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: testReport,
+        user: eligibleCitizen,
+        userLatitude: null,
+        userLongitude: null,
+        hasAlreadyVoted: false,
+      );
+
+      expect(eligibility.isEligible, isFalse);
+      expect(
+        eligibility.reason,
+        contains('Location access is required to confirm proximity'),
       );
     });
   });
@@ -533,6 +584,298 @@ void main() {
       expect(CommunityVerificationService.defaultRadiusKm, 5.0);
       expect(CommunityVerificationService.confirmationThreshold, 3);
     });
+
+    test('submitCommunityDispute rejects empty or whitespace reason', () async {
+      expect(
+        () => repository.submitCommunityDispute(
+          report: completedReport,
+          voter: voter1,
+          reason: '   ',
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        ),
+        throwsA(isA<ValidationException>()),
+      );
+    });
+
+    test(
+      'submitCommunityDispute rejects oversized evidence image (>10MB)',
+      () async {
+        final oversizedBytes = Uint8List(11 * 1024 * 1024);
+        expect(
+          () => repository.submitCommunityDispute(
+            report: completedReport,
+            voter: voter1,
+            reason: 'Water is gushing out under pressure.',
+            evidenceBytes: oversizedBytes,
+            userLatitude: 6.8912,
+            userLongitude: 79.8554,
+          ),
+          throwsA(isA<ValidationException>()),
+        );
+      },
+    );
+
+    test('submitting verification or dispute on non-existent report throws DatabaseException', () async {
+      final nonExistentReport = completedReport.copyWith(
+        reportId: 'AT-NON-EXISTENT',
+      );
+      expect(
+        () => repository.submitCommunityVerification(
+          report: nonExistentReport,
+          voter: voter1,
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        ),
+        throwsA(isA<DatabaseException>()),
+      );
+
+      expect(
+        () => repository.submitCommunityDispute(
+          report: nonExistentReport,
+          voter: voter1,
+          reason: 'Pipe leaking again.',
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        ),
+        throwsA(isA<DatabaseException>()),
+      );
+    });
+
+    test('handles gateway and network errors safely without mutating report state or leaking locks', () async {
+      mockGateway.throwError = true;
+
+      // Verification failure
+      await expectLater(
+        repository.submitCommunityVerification(
+          report: completedReport,
+          voter: voter1,
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        ),
+        throwsA(isA<NetworkException>()),
+      );
+
+      // Verify count did not increment and voter was not recorded as having voted
+      expect(
+        repository.getReportById(completedReport.reportId)!.verificationCount,
+        2,
+      );
+      expect(
+        repository.hasUserVotedOnReport(
+          reportId: completedReport.reportId,
+          userUid: voter1.uid,
+        ),
+        isFalse,
+      );
+
+      // Dispute failure
+      await expectLater(
+        repository.submitCommunityDispute(
+          report: completedReport,
+          voter: voter1,
+          reason: 'Water leak persists.',
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        ),
+        throwsA(isA<NetworkException>()),
+      );
+
+      // Verify report status did not change to disputed
+      expect(
+        repository.getReportById(completedReport.reportId)!.status,
+        FaultStatus.completed,
+      );
+
+      // Reset error and verify lock was released so voter can successfully submit now
+      mockGateway.throwError = false;
+      await repository.submitCommunityVerification(
+        report: completedReport,
+        voter: voter1,
+        userLatitude: 6.8912,
+        userLongitude: 79.8554,
+      );
+      expect(
+        repository.getReportById(completedReport.reportId)!.verificationCount,
+        3,
+      );
+    });
+
+    test(
+      'concurrent in-flight submissions are blocked by concurrency lock',
+      () async {
+        final completer = Completer<void>();
+        mockGateway.pendingCompleter = completer;
+
+        // Start first async verification
+        final future1 = repository.submitCommunityVerification(
+          report: completedReport,
+          voter: voter1,
+          userLatitude: 6.8912,
+          userLongitude: 79.8554,
+        );
+
+        // Second immediate submission while first is still pending must throw
+        expect(
+          () => repository.submitCommunityVerification(
+            report: completedReport,
+            voter: voter1,
+            userLatitude: 6.8912,
+            userLongitude: 79.8554,
+          ),
+          throwsA(isA<ValidationException>()),
+        );
+
+        // Complete first submission
+        completer.complete();
+        await future1;
+        expect(
+          repository.getReportById(completedReport.reportId)!.verificationCount,
+          3,
+        );
+      },
+    );
+
+    test('full end-to-end lifecycle: completed repair -> community confirmations -> threshold milestone -> citizen dispute reopening -> admin review and reassignment', () async {
+      final initialReport = ReportModel(
+        reportId: 'AT-LIFECYCLE-100',
+        reporterUid: 'citizen-reporter-99',
+        reporterName: 'Reporter Citizen',
+        faultType: FaultType.pipeLeak,
+        description: 'Underground main burst',
+        severity: FaultSeverity.high,
+        status: FaultStatus.completed,
+        latitude: 6.8912,
+        longitude: 79.8554,
+        address: 'Bambalapitiya Junction',
+        assignedTechnicianUid: 'tech-kasun-10',
+        assignedTechnicianName: 'Kasun Jayawardena',
+        verificationCount: 0,
+        disputeCount: 0,
+        createdAt: DateTime(2026, 9, 24, 8, 0),
+      );
+
+      final lifecycleGateway = MockCommunityVerificationGateway();
+      final lifecycleRepo = DataRepository(
+        initialReports: [initialReport],
+        communityVerificationGateway: lifecycleGateway,
+      );
+
+      // 1. Citizen A confirms
+      final citizenA = UserModel(
+        uid: 'citizen-a',
+        email: 'a@test.lk',
+        displayName: 'Citizen A',
+        phoneNumber: '+94 77 111 2222',
+        role: UserRole.citizen,
+        assignedArea: 'Colombo 04',
+        createdAt: DateTime(2026, 9, 24, 8, 0),
+      );
+      await lifecycleRepo.submitCommunityVerification(
+        report: initialReport,
+        voter: citizenA,
+        note: 'Pavement is dry now.',
+        userLatitude: 6.8915,
+        userLongitude: 79.8555,
+      );
+      expect(
+        lifecycleRepo.getReportById('AT-LIFECYCLE-100')!.verificationCount,
+        1,
+      );
+
+      // 2. Citizen B confirms
+      final citizenB = UserModel(
+        uid: 'citizen-b',
+        email: 'b@test.lk',
+        displayName: 'Citizen B',
+        phoneNumber: '+94 77 333 4444',
+        role: UserRole.citizen,
+        assignedArea: 'Colombo 04',
+        createdAt: DateTime(2026, 9, 24, 8, 0),
+      );
+      await lifecycleRepo.submitCommunityVerification(
+        report: initialReport,
+        voter: citizenB,
+        userLatitude: 6.8920,
+        userLongitude: 79.8550,
+      );
+      expect(
+        lifecycleRepo.getReportById('AT-LIFECYCLE-100')!.verificationCount,
+        2,
+      );
+
+      // 3. Citizen C confirms -> Reaches threshold of 3!
+      final citizenC = UserModel(
+        uid: 'citizen-c',
+        email: 'c@test.lk',
+        displayName: 'Citizen C',
+        phoneNumber: '+94 77 555 6666',
+        role: UserRole.citizen,
+        assignedArea: 'Colombo 04',
+        createdAt: DateTime(2026, 9, 24, 8, 0),
+      );
+      await lifecycleRepo.submitCommunityVerification(
+        report: initialReport,
+        voter: citizenC,
+        userLatitude: 6.8910,
+        userLongitude: 79.8558,
+      );
+      final verifiedReport = lifecycleRepo.getReportById('AT-LIFECYCLE-100')!;
+      expect(verifiedReport.verificationCount, 3);
+      final timelineAfterVerify = lifecycleRepo.getTimelineForReport(
+        'AT-LIFECYCLE-100',
+      );
+      expect(
+        timelineAfterVerify.any((e) => e.title == 'Community Verified'),
+        isTrue,
+      );
+
+      // 4. Resident D disputes the repair
+      final citizenD = UserModel(
+        uid: 'citizen-d',
+        email: 'd@test.lk',
+        displayName: 'Citizen D',
+        phoneNumber: '+94 77 777 8888',
+        role: UserRole.citizen,
+        assignedArea: 'Colombo 04',
+        createdAt: DateTime(2026, 9, 24, 8, 0),
+      );
+      await lifecycleRepo.submitCommunityDispute(
+        report: verifiedReport,
+        voter: citizenD,
+        reason: 'Water pressure drops rapidly and leak re-emerged on curb.',
+        userLatitude: 6.8912,
+        userLongitude: 79.8554,
+      );
+
+      final disputedReport = lifecycleRepo.getReportById('AT-LIFECYCLE-100')!;
+      expect(disputedReport.status, FaultStatus.disputed);
+      expect(disputedReport.disputeCount, 1);
+      final timelineAfterDispute = lifecycleRepo.getTimelineForReport(
+        'AT-LIFECYCLE-100',
+      );
+      expect(
+        timelineAfterDispute.any((e) => e.title == 'Dispute Raised'),
+        isTrue,
+      );
+
+      // 5. Admin reviews and reassigns report to a senior technician
+      await lifecycleRepo.assignTechnician(
+        reportId: 'AT-LIFECYCLE-100',
+        technicianUid: 'tech-senior-99',
+        technicianName: 'Saman Senior Technician',
+        adminName: 'Dilani Admin',
+        actorRole: 'admin',
+      );
+
+      final reassignedReport = lifecycleRepo.getReportById('AT-LIFECYCLE-100')!;
+      expect(reassignedReport.status, FaultStatus.assigned);
+      expect(reassignedReport.assignedTechnicianUid, 'tech-senior-99');
+      expect(
+        reassignedReport.assignedTechnicianName,
+        'Saman Senior Technician',
+      );
+    });
   });
 
   group('CitizenVerificationScreen Widget Tests', () {
@@ -598,5 +941,127 @@ void main() {
       expect(find.text('2 / 3 Confirmed'), findsOneWidget);
       expect(find.text('Repair Evidence'), findsOneWidget);
     });
+
+    testWidgets(
+      'renders Community Verified celebration badge when threshold is reached',
+      (tester) async {
+        final verifiedReport = ReportModel(
+          reportId: 'AT-2026-00127',
+          reporterUid: 'reporter-xyz',
+          reporterName: 'Sunil',
+          faultType: FaultType.pipeLeak,
+          description: 'Fixed underground main',
+          severity: FaultSeverity.high,
+          status: FaultStatus.completed,
+          latitude: 6.8912,
+          longitude: 79.8554,
+          address: 'Galle Road, Colombo 03',
+          verificationCount: 3, // Meets threshold
+          disputeCount: 0,
+          createdAt: DateTime(2026, 9, 24, 10, 0),
+        );
+
+        final mockGateway = MockCommunityVerificationGateway();
+        final repository = DataRepository(
+          initialReports: [verifiedReport],
+          communityVerificationGateway: mockGateway,
+        );
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: repository),
+              ChangeNotifierProvider<AuthProvider>(
+                create: (_) => MockAuthProvider(
+                  UserModel(
+                    uid: 'citizen-auditor',
+                    email: 'auditor@test.lk',
+                    displayName: 'Amal Citizen',
+                    phoneNumber: '+94 77 123 4567',
+                    role: UserRole.citizen,
+                    assignedArea: 'Colombo 03',
+                    createdAt: DateTime(2026, 9, 24, 10, 0),
+                  ),
+                ),
+              ),
+            ],
+            child: const MaterialApp(
+              home: CitizenVerificationScreen(
+                reportId: 'AT-2026-00127',
+                initialLatitude: 6.8912,
+                initialLongitude: 79.8554,
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(find.textContaining('Community Verified ✓'), findsOneWidget);
+        expect(find.text('3 / 3 Confirmed'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'renders Confirm Resolution and Raise Dispute buttons for completed repairs',
+      (tester) async {
+        final sampleReport = ReportModel(
+          reportId: 'AT-2026-00128',
+          reporterUid: 'reporter-xyz',
+          reporterName: 'Sunil',
+          faultType: FaultType.pipeLeak,
+          description: 'Fixed underground main',
+          severity: FaultSeverity.high,
+          status: FaultStatus.completed,
+          latitude: 6.8912,
+          longitude: 79.8554,
+          address: 'Galle Road, Colombo 03',
+          verificationCount: 1,
+          disputeCount: 0,
+          createdAt: DateTime(2026, 9, 24, 10, 0),
+        );
+
+        final mockGateway = MockCommunityVerificationGateway();
+        final repository = DataRepository(
+          initialReports: [sampleReport],
+          communityVerificationGateway: mockGateway,
+        );
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: repository),
+              ChangeNotifierProvider<AuthProvider>(
+                create: (_) => MockAuthProvider(
+                  UserModel(
+                    uid: 'citizen-auditor',
+                    email: 'auditor@test.lk',
+                    displayName: 'Amal Citizen',
+                    phoneNumber: '+94 77 123 4567',
+                    role: UserRole.citizen,
+                    assignedArea: 'Colombo 03',
+                    createdAt: DateTime(2026, 9, 24, 10, 0),
+                  ),
+                ),
+              ),
+            ],
+            child: const MaterialApp(
+              home: CitizenVerificationScreen(
+                reportId: 'AT-2026-00128',
+                initialLatitude: 6.8912,
+                initialLongitude: 79.8554,
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(find.text('Confirm Repair Resolution'), findsOneWidget);
+        expect(find.textContaining('Raise Dispute'), findsOneWidget);
+      },
+    );
   });
 }
