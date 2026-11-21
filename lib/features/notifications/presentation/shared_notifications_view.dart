@@ -149,8 +149,10 @@ class SharedNotificationsView extends StatelessWidget {
       onTap: () {
         dataRepo.markNotificationAsRead(notif.id);
         if (notif.type == 'verification' && notif.reportId.isNotEmpty) {
-          Navigator.of(context)
-              .pushNamed(AppRouter.verifyRepair, arguments: notif.reportId);
+          Navigator.of(context).pushNamed(
+            AppRouter.verifyRepair,
+            arguments: notif.reportId,
+          );
         }
       },
       borderRadius: BorderRadius.circular(14),

@@ -20,8 +20,15 @@ import 'widgets/verification_evidence_card.dart';
 /// or raise disputes to reopen cases for Water Board review.
 class CitizenVerificationScreen extends StatefulWidget {
   final String reportId;
+  final double? initialLatitude;
+  final double? initialLongitude;
 
-  const CitizenVerificationScreen({super.key, required this.reportId});
+  const CitizenVerificationScreen({
+    super.key,
+    required this.reportId,
+    this.initialLatitude,
+    this.initialLongitude,
+  });
 
   @override
   State<CitizenVerificationScreen> createState() =>
@@ -38,7 +45,13 @@ class _CitizenVerificationScreenState extends State<CitizenVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _resolveUserLocation();
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      _userLatitude = widget.initialLatitude;
+      _userLongitude = widget.initialLongitude;
+      _isLoadingLocation = false;
+    } else {
+      _resolveUserLocation();
+    }
   }
 
   Future<void> _resolveUserLocation() async {
