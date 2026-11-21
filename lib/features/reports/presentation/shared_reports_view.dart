@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/fault_constants.dart';
 import '../../../core/constants/app_roles.dart';
 import '../../../core/models/report_model.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_empty_state.dart';
@@ -205,6 +206,21 @@ class _SharedReportsViewState extends State<SharedReportsView>
               const SizedBox(height: 10),
               _buildProgressSteps(report.status),
               const SizedBox(height: 20),
+              if (report.status == FaultStatus.completed ||
+                  report.status == FaultStatus.disputed) ...[
+                AppButton(
+                  label: 'Community Verification & Audit',
+                  backgroundColor: AppColors.statusCompleted,
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pushNamed(
+                      AppRouter.verifyRepair,
+                      arguments: report.reportId,
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
               AppButton(
                 label: 'Close',
                 onPressed: () => Navigator.of(ctx).pop(),

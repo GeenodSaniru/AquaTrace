@@ -11,6 +11,7 @@ import '../../features/profile/presentation/shared_profile_view.dart';
 import '../../features/reports/presentation/citizen_report_form_screen.dart';
 import '../../features/reports/presentation/shared_reports_view.dart';
 import '../../features/technician/presentation/technician_main_shell.dart';
+import '../../features/verification/presentation/citizen_verification_screen.dart';
 
 /// Centralized routing configuration for AquaTrace.
 class AppRouter {
@@ -30,6 +31,7 @@ class AppRouter {
   static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String reportFault = '/reports/new';
+  static const String verifyRepair = '/verify-repair';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -86,6 +88,17 @@ class AppRouter {
       case reportFault:
         return MaterialPageRoute<bool>(
           builder: (_) => const CitizenReportFormScreen(),
+          settings: settings,
+        );
+      case verifyRepair:
+        final args = settings.arguments;
+        final reportId = args is String
+            ? args
+            : (args is Map && args['reportId'] != null
+                  ? args['reportId'].toString()
+                  : 'AT-2026-00126');
+        return MaterialPageRoute(
+          builder: (_) => CitizenVerificationScreen(reportId: reportId),
           settings: settings,
         );
       default:

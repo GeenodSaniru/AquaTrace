@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/notification_item.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_empty_state.dart';
 
@@ -147,6 +148,10 @@ class SharedNotificationsView extends StatelessWidget {
     return InkWell(
       onTap: () {
         dataRepo.markNotificationAsRead(notif.id);
+        if (notif.type == 'verification' && notif.reportId.isNotEmpty) {
+          Navigator.of(context)
+              .pushNamed(AppRouter.verifyRepair, arguments: notif.reportId);
+        }
       },
       borderRadius: BorderRadius.circular(14),
       child: Container(
