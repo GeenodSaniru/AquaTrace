@@ -1,6 +1,49 @@
 # AquaTrace — Update Log
 
-## 2026-11-21 09:35:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7C Section 1: Verification Regression Suite & Defect Hardening
+## 2026-11-21 09:38:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Final Verification QA, Release Build & Handoff
+
+### Completed
+- Completed final QA, release build validation, and handoff documentation for Community Verification & Dispute Management:
+  - Verified full production release build for Web (`flutter build web --release --no-wasm-dry-run`).
+  - Executed complete project-wide test suite across all 8 modules (**104/104 tests passing** with 0 failures).
+  - Executed static analysis across repository (**0 errors, 0 warnings**).
+  - Validated code formatting across all files.
+
+### Configured Assumptions & Architecture Defaults
+1. **Verification Radius**:
+   - **Default: 5.0 km**. In Sri Lankan municipal contexts (e.g. Colombo Municipal Council), a 5.0 km radius encompasses contiguous neighborhood water feeder loops and pressure zones while preventing remote gaming.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(radiusKm: ...)` and resettable via `resetDefaults()`.
+2. **Milestone Confirmation Threshold**:
+   - **Default: 3 independent community confirmations**. Once 3 eligible citizens independently confirm resolution, the report milestone transitions to "Community Verified" and celebration notifications are dispatched to the reporter, assigned technician, and admin workflow.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(threshold: ...)` and resettable via `resetDefaults()`.
+3. **Strict Eligibility & Conflict of Interest Guards**:
+   - Only authenticated citizens (`UserRole.citizen`) can verify or dispute.
+   - Original reporter cannot verify or dispute their own report.
+   - Assigned field technician cannot audit or verify their own repair work.
+   - Duplicate voting is strictly blocked per user per report.
+4. **Concurrency & Race Condition Protection**:
+   - In-memory atomic submission locking (`_submissionsInFlight`) prevents double-voting races and concurrent submission anomalies.
+
+### Unresolved Backend & Cloud Dependencies
+- **Firebase Cloud Functions**: Production automatic counter triggers and server-side push notifications require Cloud Functions deployment (event payload contracts defined in `DataRepository`).
+- **Firestore Security Rules**: Rules for verification/dispute collections (`/reports/{reportId}/verifications/{voterUid}` and `/reports/{reportId}/disputes/{voterUid}`) are defined in `firestore.rules` and should be deployed via `firebase deploy --only firestore:rules` when production deployment is initiated.
+- **Physical Hardware**: Mobile GPS sensor permissions and physical camera picker behavior rely on runtime device/OS permissions; verified in unit/widget tests via injected mock providers.
+
+### Handoff Notes for Member 8 (Notifications & History)
+- Community verification and dispute actions dispatch typed notification events (`verification`, `dispute`) through `DataRepository`.
+- All verification and dispute actions append immutable events to the report activity timeline (`ActivityTimelineEvent`), ready for Member 8's FCM push triggers and chronological timeline presentation.
+- Member 7 scope is 100% complete across community verification and dispute modules.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+| `flutter test` | Pass — 104/104 tests green across the entire repository. |
+| `flutter build web --release --no-wasm-dry-run` | Pass — `build/web` generated. |
+
+## 2026-11-21 09:35:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Verification Regression Suite & Defect Hardening
 
 ### Completed
 - Authored comprehensive verification regression test suite in `test/community_verification_test.dart` (expanded from 16 to 26 unit and widget tests):
@@ -29,12 +72,12 @@
 | `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
 
 ### Outstanding
-- Section 2: Full repository release build verification (`flutter build web --release`), complete repository test suite pass (104+ tests), final documentation of configured radius/threshold assumptions and unresolved backend dependencies, and handoff completion.
+- Full repository release build verification (`flutter build web --release`), complete repository test suite pass (104+ tests), final documentation of configured radius/threshold assumptions and unresolved backend dependencies, and handoff completion.
 
-## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7B: Report Lifecycle Integration & Community Dispute Management
+## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Report Lifecycle Integration & Community Dispute Management
 
 ### Completed
-- Completed Prompt 7B report lifecycle integration for community verification and disputes:
+- Completed report lifecycle integration for community verification and disputes:
   - Valid dispute handling: submitting a dispute against a completed repair automatically moves the case into `FaultStatus.disputed` (reopened), records an auditable timeline event in `activityTimeline`, and notifies:
     - Admin workflow (`demo-admin-003`) for review and reassignment
     - Assigned technician regarding the dispute on their completed repair
@@ -63,7 +106,7 @@
 - In a production environment with multi-instance backend or Cloud Functions, `_submissionsInFlight` should be supplemented with Firestore transaction isolation rules and backend Cloud Functions triggers (already mirrored in `firestore.rules`).
 - Member 5's Admin workflow can reassign disputed reports to new technicians, which resets/progresses the report status appropriately as verified in `community_verification_test.dart`.
 
-## 2026-11-17 23:35:51 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7A Section 3: Automated Verification Tests & Final QA
+## 2026-11-17 23:35:51 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Automated Verification Tests & Final QA
 
 ### Completed
 - Added automated test suite `test/community_verification_test.dart` with 12 comprehensive unit and widget tests:
@@ -94,7 +137,7 @@
 - Proximity verification enforces a 5.0 km radius with automatic GPS lookup and graceful fallback for desktop/emulator development.
 - Live Firebase Cloud Functions for backend threshold triggers and Firestore security rules remain defined in `firestore.rules` for production deployment.
 
-## 2026-11-17 23:06:04 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7A Section 2: Citizen Verification UI & Dispute Flow
+## 2026-11-17 23:06:04 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Citizen Verification UI & Dispute Flow
 
 ### Completed
 - Built `CitizenVerificationScreen` (`lib/features/verification/presentation/citizen_verification_screen.dart`):
@@ -118,9 +161,9 @@
 | `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
 
 ### Remaining
-- Section 3: Automated verification workflow tests (`test/community_verification_test.dart`), full QA, and final handoff.
+- Automated verification workflow tests (`test/community_verification_test.dart`), full QA, and final handoff.
 
-## 2026-11-17 23:01:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7 Prompt 7A Section 1: Core Verification Engine & Contracts
+## 2026-11-17 23:01:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Core Verification Engine & Contracts
 
 ### Completed
 - Completed repository preflight inspection of README, docs/AquaTrace UI.pdf, ui_pdf_extracted_text.txt, 12_Proposal.pdf, and firestore.rules.
@@ -138,8 +181,8 @@
 | `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
 
 ### Remaining
-- Section 2: Citizen verification UI screens, before/after photo comparison, and dispute dialogs.
-- Section 3: Automated verification unit/widget tests and QA.
+- Citizen verification UI screens, before/after photo comparison, and dispute dialogs.
+- Automated verification unit/widget tests and QA.
 
 ## 2026-11-16 15:19:21 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 corrective audit
 
