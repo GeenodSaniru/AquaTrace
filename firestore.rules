@@ -9,8 +9,8 @@ rules_version = '2';
  *   /users/{uid}/fcmTokens/{token}                // owner-managed push tokens
  *   /reports/{reportId}
  *   /reports/{reportId}/activity/{activityId}
- *   /reports/{reportId}/verifications/{voterUid}   // planned Member 7
- *   /reports/{reportId}/disputes/{voterUid}        // planned Member 7
+ *   /reports/{reportId}/verifications/{voterUid}   // Member 7 (counted by functions/)
+ *   /reports/{reportId}/disputes/{voterUid}        // Member 7 (counted by functions/)
  *
  * Trust model:
  *   - Firebase Auth uid is the only client identity signal.
@@ -413,19 +413,26 @@ service cloud.firestore {
           && reportDoc(reportId).data.status == 'completed'
           && request.resource.data.keys().hasOnly([
             'voterUid',
+            'voterName',
             'reportId',
             'createdAt',
             'note'
           ])
           && request.resource.data.voterUid == request.auth.uid
-          && request.resource.data.reportId == reportId;
+          && request.resource.data.reportId == reportId
+          && (!('voterName' in request.resource.data)
+              || request.resource.data.voterName is string);
+
+        // counted / countedAs / rejected are written by the
+        // onVerificationCreated Cloud Function (Admin SDK); clients cannot.
 
         allow update, delete: if false;
       }
 
       // ------------------------------------------------------------------------
       // Community disputes — one dispute document per citizen uid
-      // Auto-reopen to disputed must be performed by Cloud Functions.
+      // Counting the dispute and the auto-reopen to disputed are performed by the
+      // onDisputeCreated Cloud Function (Admin SDK), never by clients.
       // ------------------------------------------------------------------------
       match /disputes/{voterUid} {
         allow read: if isSignedIn();
@@ -433,16 +440,24 @@ service cloud.firestore {
         allow create: if isCitizen()
           && voterUid == request.auth.uid
           && reportExists(reportId)
-          && reportDoc(reportId).data.status == 'completed'
+          && reportDoc(reportId).data.status in ['completed', 'disputed']
           && request.resource.data.keys().hasOnly([
             'voterUid',
+            'voterName',
             'reportId',
             'reason',
+            'evidenceImageUrl',
             'createdAt'
           ])
           && request.resource.data.voterUid == request.auth.uid
           && request.resource.data.reportId == reportId
-          && request.resource.data.reason is string;
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() > 0
+          && request.resource.data.reason.size() <= 2000
+          && (!('voterName' in request.resource.data)
+              || request.resource.data.voterName is string)
+          && (!('evidenceImageUrl' in request.resource.data)
+              || request.resource.data.evidenceImageUrl is string);
 
         allow update, delete: if isAdmin();
       }

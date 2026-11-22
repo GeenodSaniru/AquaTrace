@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:aquatrace/core/constants/app_roles.dart';
 import 'package:aquatrace/core/constants/fault_constants.dart';
 import 'package:aquatrace/core/models/activity_timeline_event.dart';
@@ -104,6 +106,63 @@ Future<List<NotificationItem>> inbox(DataRepository repo, String uid) async {
 }
 
 void main() {
+  group('Server-written Timestamps in report / vote / dispute documents', () {
+    final moment = DateTime.utc(2026, 11, 22, 3, 30);
+
+    test('ReportModel reads Timestamp times instead of substituting "now"', () {
+      final map = MockData.initialReports.first.toMap()
+        ..['createdAt'] = Timestamp.fromDate(moment)
+        ..['updatedAt'] = Timestamp.fromDate(
+          moment.add(const Duration(hours: 1)),
+        )
+        ..['assignedAt'] = Timestamp.fromDate(
+          moment.add(const Duration(minutes: 5)),
+        );
+      final report = ReportModel.fromMap(map);
+      expect(report.createdAt.isAtSameMomentAs(moment), isTrue);
+      expect(
+        report.updatedAt!.isAtSameMomentAs(
+          moment.add(const Duration(hours: 1)),
+        ),
+        isTrue,
+      );
+      expect(
+        report.assignedAt!.isAtSameMomentAs(
+          moment.add(const Duration(minutes: 5)),
+        ),
+        isTrue,
+      );
+    });
+
+    test('ReportModel still reads ISO strings and tolerates missing times', () {
+      final map = MockData.initialReports.first.toMap();
+      final report = ReportModel.fromMap(map);
+      expect(report.createdAt, MockData.initialReports.first.createdAt);
+      map
+        ..remove('updatedAt')
+        ..remove('assignedAt');
+      final sparse = ReportModel.fromMap(map);
+      expect(sparse.updatedAt, isNull);
+      expect(sparse.assignedAt, isNull);
+    });
+
+    test('vote and dispute records read Timestamp createdAt', () {
+      final vote = VerificationVoteModel.fromMap({
+        'voterUid': 'v1',
+        'reportId': 'AT-1',
+        'createdAt': Timestamp.fromDate(moment),
+      });
+      final dispute = DisputeRecordModel.fromMap({
+        'voterUid': 'v1',
+        'reportId': 'AT-1',
+        'reason': 'Still leaking',
+        'createdAt': Timestamp.fromDate(moment),
+      });
+      expect(vote.createdAt.isAtSameMomentAs(moment), isTrue);
+      expect(dispute.createdAt.isAtSameMomentAs(moment), isTrue);
+    });
+  });
+
   group('Push payload type', () {
     test('is parsed; unknown values degrade; absent is null', () {
       expect(

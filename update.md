@@ -1,6 +1,44 @@
 # AquaTrace — Update Log
 
-## 2026-11-22 09:03:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 1/4: sync with team work and reconcile workflow events
+## 2026-11-22 09:10:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 2/4: server-side workflow triggers, aggregation, dedupe and push privacy
+
+Branch `feature/notifications-history`. Builds on Part 1 (merge of Member 6/7 work).
+
+### Completed
+- **Trusted event coverage** (`functions/`): triggers for every workflow event — report created (Member 3), approved / assigned / repair started / completed (Members 5, 6), community **verification** and **dispute** documents (Member 7). Full "event → writer → trigger → result" table in `functions/README.md`.
+- **Aggregation moved to the server** (`onVerificationCreated`, `onDisputeCreated`): counts the vote/dispute in a transaction, sets `disputed`, appends audit events, announces the community milestone on the vote that *reaches* the threshold only. Idempotent via `counted` / `countedAs` markers.
+- **Duplicate prevention:** deterministic ids from the trigger event id; **logical ids** for milestone / dispute notifications (stable across retries and across triggers); deterministic audit-event ids with `create()`; the report-update trigger emits nothing for `→ disputed` (single source) and counter bumps never re-notify.
+- **Correct recipients / no self-verification:** the reporter now gets an informational *Repair Completed* (Member 7's rules forbid verifying your own report); the PDF's *Verify Repair* request goes to citizens in the report's service area (capped at 50, de-duplicated, excluding reporter / technician / admins).
+- **Invalid references handled:** deleted report or user, blank uids, vote on a report that is no longer completed (marked `rejected`) are skipped without errors.
+- **Preferences honoured server-side** (`applyPreferences`): category off drops the record and push; `pushEnabled: false` keeps the in-app record only. (Client sync of the Settings switches is Part 3.)
+- **Push payload privacy:** OS-visible text is now generic (`Report <id>. Open AquaTrace for details.`) with no names, addresses, reasons or uids; the data block is exactly `{notificationId, reportId, type}`.
+- **Audit trail privacy:** server-written dispute / verification events contain no voter name or dispute reason (activity is readable by all citizens).
+
+### Bugs found and fixed
+- **App ↔ rules mismatch (Member 7):** the app writes vote/dispute documents with `voterName` / `evidenceImageUrl` and directly updates report counters, status and activity; `firestore.rules` rejected all of that (fixed key list; counters reserved for functions), so voting/disputing could never succeed against the deployed rules. Fixed on both sides: rules now accept the real documents (and disputes on an already `disputed` report), and `FirebaseCommunityVerificationGateway` writes **only** the vote/dispute document (the functions do the rest). A static contract test fails if app fields drift from the rules again — it fails against the previous rules (`rules reject vote field "voterName"`) and passes now.
+- `ReportModel`, `VerificationVoteModel`, `DisputeRecordModel` read Firestore `Timestamp` values as "now" (server-written `updatedAt` / `createdAt` would have mis-sorted reports). They now use the tolerant parser from 8A.
+- Nearby-citizen cap was applied before de-duplication (found by a test) → now de-duplicated first.
+
+### Files changed
+`functions/{index.js, notification_events.js, README.md, test/notification_events.test.js, test/contract.test.js}`, `firestore.rules`, `lib/core/models/{report_model,verification_vote_model,dispute_record_model}.dart`, `lib/core/services/community_verification_gateway.dart` (**Member 7 — please review**: removed the report-counter / activity writes the rules forbid), `test/notification_events_test.dart`, `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **200/200** |
+| `npm test` (in `functions/`) | Pass — **40/40** (31 logic + 9 contract) |
+| `node --check functions/index.js` | Pass (syntax only — **not** run against Firebase) |
+
+### Not done / blockers
+- `functions/` is **not deployed and not emulator-tested** (no Java / Firebase CLI here); `firestore.rules` changes are not deployed or emulator-tested. Replay / duplicate behaviour is proven for the pure logic only; the transactions in `index.js` need the emulator plan in `functions/README.md`.
+- "Nearby" for *Verify Repair* is the profile area, not GPS.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:02:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 1/4: sync with team work and reconcile workflow events
 
 Branch `feature/notifications-history`. Prompt 8B is delivered in four parts, each committed and pushed when finished (Part 1 below; Parts 2–4 are appended above this entry as they land).
 

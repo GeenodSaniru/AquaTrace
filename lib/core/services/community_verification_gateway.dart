@@ -50,7 +50,6 @@ class FirebaseCommunityVerificationGateway
         .collection('reports')
         .doc(report.reportId);
     final voteRef = reportRef.collection('verifications').doc(vote.voterUid);
-    final activityRef = reportRef.collection('activity').doc(activity.id);
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       final snapshot = await transaction.get(reportRef);
@@ -71,19 +70,15 @@ class FirebaseCommunityVerificationGateway
         );
       }
 
+      // The client writes ONLY the vote document. `verificationCount`, the
+      // audit-trail entry and the "Community Verified" milestone are applied
+      // by the trusted `onVerificationCreated` Cloud Function (functions/),
+      // because `firestore.rules` forbid clients from writing counters or
+      // activity on someone else's report. [activity] and
+      // [newVerificationCount] only drive the optimistic local state.
       transaction.set(voteRef, {
         ...vote.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      transaction.update(reportRef, {
-        'verificationCount': newVerificationCount,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      transaction.set(activityRef, {
-        ...activity.toMap(),
-        'timestamp': FieldValue.serverTimestamp(),
       });
     });
   }
@@ -101,7 +96,6 @@ class FirebaseCommunityVerificationGateway
         .collection('reports')
         .doc(report.reportId);
     final disputeRef = reportRef.collection('disputes').doc(dispute.voterUid);
-    final activityRef = reportRef.collection('activity').doc(activity.id);
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       final snapshot = await transaction.get(reportRef);
@@ -123,21 +117,15 @@ class FirebaseCommunityVerificationGateway
         );
       }
 
+      // The client writes ONLY the dispute document. The trusted
+      // `onDisputeCreated` Cloud Function (functions/) increments
+      // `disputeCount`, reopens the report as `disputed`, appends the
+      // audit-trail entry and notifies everyone concerned - clients may not
+      // write those fields under `firestore.rules`. [activity] and
+      // [newDisputeCount] only drive the optimistic local state.
       transaction.set(disputeRef, {
         ...dispute.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Community dispute automatically transitions status to disputed
-      transaction.update(reportRef, {
-        'status': FaultStatus.disputed.name,
-        'disputeCount': newDisputeCount,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      transaction.set(activityRef, {
-        ...activity.toMap(),
-        'timestamp': FieldValue.serverTimestamp(),
       });
     });
   }
