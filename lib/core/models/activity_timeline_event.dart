@@ -1,4 +1,5 @@
 import '../constants/fault_constants.dart';
+import 'firestore_time.dart';
 
 /// Represents an immutable audit trail entry in a report's lifecycle history.
 class ActivityTimelineEvent {
@@ -47,9 +48,22 @@ class ActivityTimelineEvent {
       actorName: map['actorName'] as String? ?? 'System',
       actorRole: map['actorRole'] as String? ?? 'System',
       status: FaultStatus.fromString(map['status'] as String?),
-      timestamp: map['timestamp'] != null
-          ? DateTime.tryParse(map['timestamp'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      timestamp: parseFirestoreTime(map['timestamp']) ?? unknownTime,
     );
+  }
+
+  /// False when the stored document had no usable timestamp.
+  bool get hasKnownTime => isKnownTime(timestamp);
+
+  /// Chronological (oldest first) ordering with a stable tie-break on [id].
+  ///
+  /// Events with an unknown time sort first rather than being given a
+  /// fabricated "now", so they cannot appear to be the newest event.
+  static int compareChronologically(
+    ActivityTimelineEvent a,
+    ActivityTimelineEvent b,
+  ) {
+    final byTime = a.timestamp.compareTo(b.timestamp);
+    return byTime != 0 ? byTime : a.id.compareTo(b.id);
   }
 }

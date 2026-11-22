@@ -1,3 +1,5 @@
+import 'firestore_time.dart';
+
 /// Community dispute record lodged by a citizen at `/reports/{reportId}/disputes/{voterUid}`.
 class DisputeRecordModel {
   final String voterUid;
@@ -38,9 +40,7 @@ class DisputeRecordModel {
       reportId: map['reportId'] as String? ?? '',
       reason: map['reason'] as String? ?? '',
       evidenceImageUrl: map['evidenceImageUrl'] as String?,
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: parseFirestoreTime(map['createdAt']) ?? DateTime.now(),
     );
   }
 }

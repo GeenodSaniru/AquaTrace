@@ -10,6 +10,7 @@ import 'package:aquatrace/core/constants/fault_constants.dart';
 import 'package:aquatrace/core/errors/app_exception.dart';
 import 'package:aquatrace/core/models/activity_timeline_event.dart';
 import 'package:aquatrace/core/models/dispute_record_model.dart';
+import 'package:aquatrace/core/models/notification_item.dart';
 import 'package:aquatrace/core/models/report_model.dart';
 import 'package:aquatrace/core/models/user_model.dart';
 import 'package:aquatrace/core/models/verification_vote_model.dart';
@@ -18,6 +19,14 @@ import 'package:aquatrace/core/services/data_repository.dart';
 import 'package:aquatrace/features/auth/providers/auth_provider.dart';
 import 'package:aquatrace/features/verification/presentation/citizen_verification_screen.dart';
 import 'package:aquatrace/features/verification/services/community_verification_service.dart';
+
+/// Notifications are per recipient: the backend (demo mode: the repository)
+/// delivers each message to its recipient's own inbox. Bind [uid] and read it.
+Future<List<NotificationItem>> inboxOf(DataRepository repo, String uid) async {
+  repo.bindNotificationUser(uid);
+  await Future<void>.delayed(Duration.zero);
+  return repo.notifications;
+}
 
 class MockCommunityVerificationGateway implements CommunityVerificationGateway {
   final List<VerificationVoteModel> recordedVotes = [];
@@ -441,9 +450,10 @@ void main() {
         'Water leak persists along pavement curb.',
       );
 
-      // Dispute notification generated
-      expect(repository.notifications, isNotEmpty);
-      expect(repository.notifications.any((n) => n.type == 'dispute'), isTrue);
+      // Dispute notification generated for the recipients (here: the admin).
+      final adminInbox = await inboxOf(repository, 'demo-admin-003');
+      expect(adminInbox, isNotEmpty);
+      expect(adminInbox.any((n) => n.type == 'dispute'), isTrue);
 
       // Timeline has dispute event
       final timeline = repository.getTimelineForReport('AT-TEST-002');
@@ -468,33 +478,25 @@ void main() {
         userLongitude: 79.8554,
       );
 
-      final notifs = testRepo.notifications;
-      // 1. Admin notified
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'demo-admin-003' && n.type == 'dispute',
-        ),
-        isTrue,
-      );
-      // 2. Assigned Technician notified
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'tech-kasun-999' && n.type == 'dispute',
-        ),
-        isTrue,
-      );
-      // 3. Original Reporter notified
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'reporter-111' && n.type == 'dispute',
-        ),
-        isTrue,
-      );
-      // 4. Voter received submission confirmation
-      expect(
-        notifs.any((n) => n.recipientUid == voter1.uid && n.type == 'dispute'),
-        isTrue,
-      );
+      // Each recipient finds the dispute in their own inbox, referencing the
+      // right report, and nobody else's.
+      for (final uid in [
+        'demo-admin-003', // 1. Admin notified
+        'tech-kasun-999', // 2. Assigned technician notified
+        'reporter-111', // 3. Original reporter notified
+        voter1.uid, // 4. Voter received submission confirmation
+      ]) {
+        final inbox = await inboxOf(testRepo, uid);
+        final dispute = inbox
+            .where(
+              (n) =>
+                  n.type == 'dispute' && n.reportId == reportWithTech.reportId,
+            )
+            .toList();
+        expect(dispute, hasLength(1), reason: uid);
+        expect(dispute.single.recipientUid, uid);
+        expect(dispute.single.reportId, reportWithTech.reportId);
+      }
     });
 
     test('reaching verification threshold dispatches milestone notifications to reporter, technician, and admin', () async {
@@ -515,25 +517,21 @@ void main() {
         userLongitude: 79.8554,
       );
 
-      final notifs = testRepo.notifications;
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'reporter-111' && n.type == 'verification',
-        ),
-        isTrue,
-      );
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'tech-kasun-999' && n.type == 'verification',
-        ),
-        isTrue,
-      );
-      expect(
-        notifs.any(
-          (n) => n.recipientUid == 'demo-admin-003' && n.type == 'verification',
-        ),
-        isTrue,
-      );
+      for (final uid in ['reporter-111', 'tech-kasun-999', 'demo-admin-003']) {
+        final inbox = await inboxOf(testRepo, uid);
+        final milestone = inbox
+            .where(
+              (n) =>
+                  n.type == 'verification' &&
+                  n.reportId == reportWithTech.reportId,
+            )
+            .toList();
+        expect(milestone, hasLength(1), reason: uid);
+        expect(milestone.single.reportId, reportWithTech.reportId);
+      }
+      // The voter is not notified about the milestone.
+      final voterInbox = await inboxOf(testRepo, voter1.uid);
+      expect(voterInbox.where((n) => n.type == 'verification'), isEmpty);
     });
 
     test(

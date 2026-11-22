@@ -61,4 +61,4 @@ flutter test
 - Reports/notifications still primarily **in-memory** (`DataRepository`); Firestore sync stubs remain for feature owners.
 - Google/Apple sign-in buttons are UI stubs until OAuth packages + Console providers are configured.
 - Firestore rules emulator validation needs a local JRE; Console Rules Playground is an alternative.
-- Admin “Activity” tab currently reuses notifications UI — Member 8 owns timeline UX.
+- Admin “Activity” tab is now the report Activity History (Member 8); the dashboard bell opens the notification list.

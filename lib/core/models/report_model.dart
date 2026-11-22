@@ -1,4 +1,5 @@
 import '../constants/fault_constants.dart';
+import 'firestore_time.dart';
 
 /// Central Firestore data contract for water pipe fault reports in `/reports/{reportId}`.
 class ReportModel {
@@ -101,20 +102,14 @@ class ReportModel {
       afterImageUrl: map['afterImageUrl'] as String?,
       assignedTechnicianUid: map['assignedTechnicianUid'] as String?,
       assignedTechnicianName: map['assignedTechnicianName'] as String?,
-      assignedAt: map['assignedAt'] != null
-          ? DateTime.tryParse(map['assignedAt'].toString())
-          : null,
+      assignedAt: parseFirestoreTime(map['assignedAt']),
       assignedArea: map['assignedArea'] as String? ?? 'Colombo 03',
       isEmergency: map['isEmergency'] as bool? ?? false,
       verificationCount: (map['verificationCount'] as num?)?.toInt() ?? 0,
       disputeCount: (map['disputeCount'] as num?)?.toInt() ?? 0,
       repairNotes: map['repairNotes'] as String?,
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString())
-          : null,
+      createdAt: parseFirestoreTime(map['createdAt']) ?? DateTime.now(),
+      updatedAt: parseFirestoreTime(map['updatedAt']),
     );
   }
 

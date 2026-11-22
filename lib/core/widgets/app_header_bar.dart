@@ -28,8 +28,11 @@ class AppHeaderBar extends StatelessWidget implements PreferredSizeWidget {
     this.leading,
   });
 
+  // Three text lines (subtitle + title + secondary subtitle) need extra height;
+  // at 80 they overflow by a couple of pixels.
   @override
-  Size get preferredSize => const Size.fromHeight(80.0);
+  Size get preferredSize =>
+      Size.fromHeight(secondarySubtitle != null ? 96.0 : 80.0);
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +112,9 @@ class AppHeaderBar extends StatelessWidget implements PreferredSizeWidget {
                     color: Colors.white,
                     size: 22,
                   ),
-                  tooltip: 'Notifications',
+                  tooltip: unreadCount > 0
+                      ? 'Notifications, $unreadCount unread'
+                      : 'Notifications',
                   onPressed:
                       onNotificationTap ??
                       () {
@@ -120,24 +125,27 @@ class AppHeaderBar extends StatelessWidget implements PreferredSizeWidget {
                   Positioned(
                     right: 8,
                     top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.statusDisputed,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Text(
-                        '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                    // The badge overlaps the bell; it must not swallow taps.
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppColors.statusDisputed,
+                          shape: BoxShape.circle,
                         ),
-                        textAlign: TextAlign.center,
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                   ),

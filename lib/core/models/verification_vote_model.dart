@@ -1,3 +1,5 @@
+import 'firestore_time.dart';
+
 /// Community verification vote record stored at `/reports/{reportId}/verifications/{voterUid}`.
 class VerificationVoteModel {
   final String voterUid;
@@ -32,9 +34,7 @@ class VerificationVoteModel {
       voterUid: documentId ?? map['voterUid'] as String? ?? '',
       voterName: map['voterName'] as String? ?? 'Citizen',
       reportId: map['reportId'] as String? ?? '',
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: parseFirestoreTime(map['createdAt']) ?? DateTime.now(),
       note: map['note'] as String?,
     );
   }
