@@ -1,5 +1,39 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 19:06:08 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 2/4: backend delivery path verified with fakes (order, replay, preferences, missing users)
+
+Branch `feature/notifications-history`. Builds on Part 1.
+
+### Why
+The Cloud Functions wiring had never been exercised (no Java / Firebase CLI here). The riskiest part — creating notifications, de-duplicating, honouring preferences, skipping deleted users, sending push — lived inside `index.js` tied to Firestore, so none of it was testable. It is now isolated and tested.
+
+### Completed
+- **`functions/delivery.js`** (new): `deliverNotifications` and `sendToTokens` with injected `store` / `messaging`; `index.js` now supplies Firestore / FCM implementations and delegates. Behaviour is unchanged except the ordering fix below.
+- **Bug found and fixed — notification order within an event.** The previous implementation created one event's notifications **in parallel** (`Promise.allSettled`), so a later notification could be stored (and timestamped) before an earlier one: e.g. the reporter could see *Report Approved* **newer** than *Technician Assigned*. Delivery is now sequential per recipient in planned (workflow) order, parallel across recipients. A test with a deliberately slow first notification fails under a parallel implementation.
+- **Server lifecycle replay** (`test/lifecycle.test.js`): submit → approve/assign → start → complete → 3 confirmations → dispute run through the real planners + delivery with an in-memory store. Every recipient's newest-first inbox equals the lists asserted by the Dart demo-backend test (`test/lifecycle_history_test.dart`), so demo and backend behaviour cannot drift apart silently. The reporter and technician are never asked to verify; a 4th confirmation does not repeat the milestone; the function's own counter / status update re-triggers nothing.
+- **Replay / duplicate delivery:** replaying every event changes nothing (all `existing`, no second push); different trigger events for the same logical dispute share one notification.
+- **Failure isolation:** failed push does not fail delivery or block later items; failed create for one recipient does not block others; deleted users skipped; preferences (category off → no record, push off → record without push).
+- **Push tokens:** only `registration-token-not-registered` / `invalid-registration-token` remove a token; transient FCM errors keep it; the FCM message never carries the in-app body or the recipient uid.
+- **Client: pending server timestamps.** A history event written by this device but not yet confirmed has a `null` server timestamp in the local snapshot; it was treated as "unknown time" and **sorted to the top of the timeline**, then jumped into place. `activityEventFromDocument` uses the local clock while the write is pending (confirmed documents with a missing time stay "unknown"; real timestamps are never replaced).
+
+### Files changed
+New: `functions/delivery.js`, `functions/test/delivery.test.js`, `functions/test/lifecycle.test.js`. Modified: `functions/index.js`, `functions/README.md` (delivery guarantees), `lib/features/notifications/services/notification_gateway.dart`, `test/notifications_unit_test.dart` (+3 tests), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **229/229** (226 + 3 new) |
+| `npm test` (in `functions/`) | Pass — **61/61** (43 + 18 new) |
+| `node --check functions/index.js`, `delivery.js` | Pass (syntax only; Firebase wiring still **not** run against Firebase) |
+
+### Still true
+`functions/` is not deployed and not emulator-tested; the Firestore-backed `deliveryStore` in `index.js` (≈25 lines) is the only untested glue.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
 ## 2026-11-22 19:02:32 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 1/4: lifecycle history audit (order, titles, recipients)
 
 Branch `feature/notifications-history` (clean and in sync with `origin` at start; no new commits on `origin/main` / `origin/test` since 8B). Prompt 8C is delivered in four parts, each committed and pushed when finished.

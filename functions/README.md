@@ -10,7 +10,7 @@ with the Admin SDK — this folder.
 > **Status — not deployed, not emulator-tested.**
 > `notification_events.js` (who gets which notification, counting rules,
 > preferences, push text) and the app/rules/backend document contracts are unit
-> tested with `npm test` (40 tests, no Firebase needed). `index.js` (Firestore
+> tested with `npm test` (61 tests, no Firebase needed). `index.js` (Firestore
 > triggers, transactions, FCM send) has **not** been deployed or run against the
 > Firebase emulator in this repository. Until it is deployed and verified,
 > server-created notifications, vote/dispute counting and push delivery are
@@ -79,6 +79,24 @@ Rules of the road:
   immutable (rules: no update / delete).
 * If the notification document is created but the push send fails, the retry
   skips the (existing) document and will not re-push.
+
+## Delivery guarantees (`delivery.js`, tested with fakes)
+
+* **Order:** one recipient's notifications are created sequentially in workflow
+  order (e.g. *Report Approved* before *Technician Assigned*), so their server
+  timestamps — and therefore the inbox order — follow the workflow; different
+  recipients are processed in parallel. (An earlier version created them in
+  parallel, which let a later notification overtake an earlier one.)
+* **Replay safe:** a replayed event reports `existing` for every document and
+  sends no second push.
+* **Isolation:** a failed push never fails the delivery or blocks later items;
+  a failed create for one recipient never blocks the others.
+* **Tokens:** only `registration-token-not-registered` /
+  `invalid-registration-token` remove a token; transient FCM errors keep it.
+* `test/lifecycle.test.js` replays submit → approve/assign → start → complete →
+  3 confirmations → dispute through the real planners and delivery and checks
+  every recipient's inbox; the expected lists equal the Dart demo-backend test
+  (`test/lifecycle_history_test.dart`).
 
 ## Notification document contract
 

@@ -59,6 +59,33 @@ List<ActivityTimelineEvent> sortActivityChronologically(
   return events.toList()..sort(ActivityTimelineEvent.compareChronologically);
 }
 
+/// Builds an audit event from a stored document.
+///
+/// An event written by *this device* and not yet confirmed by the server has a
+/// `null` server timestamp in the local snapshot. Without a fix it would be
+/// treated as "time unknown" and sorted to the very top of the timeline, then
+/// jump into place once confirmed. While the write is pending the local clock
+/// is used instead, so the entry appears where it belongs immediately.
+ActivityTimelineEvent activityEventFromDocument(
+  Map<String, dynamic> data,
+  String id, {
+  required bool hasPendingWrites,
+  DateTime? now,
+}) {
+  final event = ActivityTimelineEvent.fromMap(data, documentId: id);
+  if (event.hasKnownTime || !hasPendingWrites) return event;
+  return ActivityTimelineEvent(
+    id: event.id,
+    reportId: event.reportId,
+    title: event.title,
+    description: event.description,
+    actorName: event.actorName,
+    actorRole: event.actorRole,
+    status: event.status,
+    timestamp: now ?? DateTime.now(),
+  );
+}
+
 /// Cloud Firestore implementation.
 ///
 /// * `/users/{uid}/notifications/{id}`  - read / mark-read by the owner.
@@ -140,7 +167,11 @@ class FirebaseNotificationGateway implements NotificationGateway {
           for (final doc in snapshot.docs) {
             try {
               events.add(
-                ActivityTimelineEvent.fromMap(doc.data(), documentId: doc.id),
+                activityEventFromDocument(
+                  doc.data(),
+                  doc.id,
+                  hasPendingWrites: doc.metadata.hasPendingWrites,
+                ),
               );
             } on Object catch (error) {
               debugPrint(

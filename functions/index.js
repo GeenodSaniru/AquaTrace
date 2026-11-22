@@ -33,6 +33,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
 const events = require('./notification_events');
+const delivery = require('./delivery');
 
 initializeApp();
 const db = getFirestore();
@@ -87,70 +88,42 @@ async function loadPreferences(uids) {
 }
 
 // ---------------------------------------------------------------------------
-// Push
+// Push + delivery (logic lives in delivery.js so it can be tested with fakes)
 // ---------------------------------------------------------------------------
 
+/** Sends one notification to the user's devices; dead tokens are removed. */
 async function sendPush(uid, notificationDocument) {
   const tokenSnapshot = await db.collection('users').doc(uid).collection('fcmTokens').get();
-  if (tokenSnapshot.empty) return;
-  const tokens = tokenSnapshot.docs.map((doc) => doc.id);
-
-  const response = await getMessaging().sendEachForMulticast(
-    events.buildPushMessage(tokens, notificationDocument),
-  );
-
-  // Remove tokens FCM reports as dead so they are not retried forever.
-  const stale = [];
-  response.responses.forEach((result, index) => {
-    if (!result.success && events.DEAD_TOKEN_CODES.includes(result.error && result.error.code)) {
-      stale.push(tokenSnapshot.docs[index].ref.delete());
-    }
+  await delivery.sendToTokens({
+    tokens: tokenSnapshot.docs.map((doc) => ({ token: doc.id, remove: () => doc.ref.delete() })),
+    document: notificationDocument,
+    messaging: getMessaging(),
   });
-  await Promise.allSettled(stale);
 }
 
-// ---------------------------------------------------------------------------
-// Delivery
-// ---------------------------------------------------------------------------
+/** Firestore-backed implementation of the delivery store. */
+const deliveryStore = {
+  filterExistingUsers,
+  loadPreferences,
+  async createNotification(uid, id, document) {
+    const reference = db.collection('users').doc(uid).collection('notifications').doc(id);
+    try {
+      await reference.create({ ...document, createdAt: FieldValue.serverTimestamp() });
+      return 'created';
+    } catch (error) {
+      if (error && error.code === ALREADY_EXISTS) return 'exists'; // duplicate trigger delivery
+      throw error;
+    }
+  },
+  sendPush,
+};
 
 /**
- * Creates each planned notification once, then pushes it.
- *
- * Skips recipients that no longer exist, honours each recipient's saved
- * preferences, and relies on deterministic ids so retries and duplicate
- * triggers cannot create a second notification or a second push.
+ * Creates each planned notification once, then pushes it (see delivery.js:
+ * ordered per recipient, idempotent, preference- and missing-user-aware).
  */
-async function deliver(eventId, reportId, planned) {
-  if (planned.length === 0) return;
-  const recipients = planned.map((item) => item.recipientUid);
-  const existing = await filterExistingUsers(recipients);
-  const reachable = planned.filter((item) => existing.has(item.recipientUid));
-  const preferences = await loadPreferences(reachable.map((item) => item.recipientUid));
-  const deliverable = events.applyPreferences(reachable, preferences);
-
-  const results = await Promise.allSettled(
-    deliverable.map(async (item) => {
-      const id = events.notificationId(eventId, item);
-      const document = events.toNotificationDocument(id, reportId, item);
-      const reference = db.collection('users').doc(item.recipientUid).collection('notifications').doc(id);
-      try {
-        await reference.create({ ...document, createdAt: FieldValue.serverTimestamp() });
-      } catch (error) {
-        if (error && error.code === ALREADY_EXISTS) return; // duplicate trigger delivery
-        throw error;
-      }
-      if (!item.push) return;
-      try {
-        await sendPush(item.recipientUid, document);
-      } catch (error) {
-        // The in-app record exists; a failed push must not fail the trigger.
-        logger.warn('Push delivery failed', { recipientUid: item.recipientUid, id, error: String(error) });
-      }
-    }),
-  );
-  results
-    .filter((result) => result.status === 'rejected')
-    .forEach((result) => logger.error('Notification creation failed', { reportId, error: String(result.reason) }));
+function deliver(eventId, reportId, planned) {
+  return delivery.deliverNotifications({ eventId, reportId, planned, store: deliveryStore, logger });
 }
 
 /** Appends an audit event once (deterministic id; the trail is immutable). */

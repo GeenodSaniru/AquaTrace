@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/notification_fakes.dart';
 
 void main() {
+  pendingTimestampTests();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('Timestamp parsing', () {
@@ -724,6 +725,51 @@ void main() {
       provider.beforeSignOut = () async => throw StateError('cleanup failed');
       await provider.signOut();
       expect(provider.isAuthenticated, isFalse);
+    });
+  });
+}
+
+void pendingTimestampTests() {
+  group('Pending server timestamps in audit events', () {
+    final now = DateTime(2026, 11, 22, 19, 30);
+
+    test(
+      'an unconfirmed local write without a timestamp uses the local clock',
+      () {
+        final event = activityEventFromDocument(
+          {'title': 'Repair Started', 'status': 'ongoing', 'reportId': 'AT-1'},
+          'a1',
+          hasPendingWrites: true,
+          now: now,
+        );
+        expect(event.timestamp, now);
+        expect(event.hasKnownTime, isTrue);
+      },
+    );
+
+    test('a confirmed document with a missing timestamp stays "unknown"', () {
+      final event = activityEventFromDocument(
+        {'title': 'Old event', 'status': 'pending'},
+        'a2',
+        hasPendingWrites: false,
+        now: now,
+      );
+      expect(event.hasKnownTime, isFalse);
+    });
+
+    test('a real timestamp is never replaced', () {
+      final stored = DateTime.utc(2026, 9, 24, 5, 2);
+      final event = activityEventFromDocument(
+        {
+          'title': 'x',
+          'status': 'pending',
+          'timestamp': stored.toIso8601String(),
+        },
+        'a3',
+        hasPendingWrites: true,
+        now: now,
+      );
+      expect(event.timestamp.isAtSameMomentAs(stored), isTrue);
     });
   });
 }
