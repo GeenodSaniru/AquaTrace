@@ -101,9 +101,13 @@ void main() {
       expect(reconstructed.latitude, report.latitude);
     });
 
-    test('DataRepository initializes with MockData and filters accurately', () {
+    test('DataRepository initializes with MockData and filters accurately', () async {
       final repo = DataRepository();
       expect(repo.reports.length, MockData.initialReports.length);
+      // Notifications belong to the signed-in user: none until a user is bound.
+      expect(repo.notifications, isEmpty);
+      repo.bindNotificationUser(MockData.citizenUser.uid);
+      await Future<void>.delayed(Duration.zero);
       expect(repo.notifications.length, MockData.initialNotifications.length);
 
       final citizenReports = repo.getReportsForCitizen(

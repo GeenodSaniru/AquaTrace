@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aquatrace/core/constants/fault_constants.dart';
@@ -23,6 +25,34 @@ void main() {
     expect(
       jobs.any((report) => report.assignedTechnicianUid == 'tech-nimal-007'),
       isFalse,
+    );
+  });
+
+  test('missing technician identity cannot expose unassigned jobs', () {
+    final repository = DataRepository(
+      initialReports: [
+        MockData.initialReports.first.copyWith(
+          assignedTechnicianUid: null,
+          assignedTechnicianName: null,
+        ),
+      ],
+    );
+
+    expect(repository.getReportsForTechnician(''), isEmpty);
+    expect(repository.getReportsForTechnician('   '), isEmpty);
+  });
+
+  test('technician actions reject a missing identity', () {
+    final repository = DataRepository();
+
+    expect(
+      () => repository.updateTechnicianJobStatus(
+        reportId: 'AT-2026-00128',
+        technicianUid: ' ',
+        actorName: 'Unknown',
+        newStatus: FaultStatus.ongoing,
+      ),
+      throwsA(isA<PermissionException>()),
     );
   });
 
@@ -90,4 +120,110 @@ void main() {
       throwsA(isA<ValidationException>()),
     );
   });
+
+  test('assignment changes move a job into the new technician queue', () async {
+    final repository = DataRepository();
+
+    expect(
+      repository
+          .getReportsForTechnician('new-technician')
+          .any((report) => report.reportId == 'AT-2026-00125'),
+      isFalse,
+    );
+
+    await repository.assignTechnician(
+      reportId: 'AT-2026-00125',
+      technicianUid: 'new-technician',
+      technicianName: 'New Technician',
+      adminName: 'Dispatcher',
+      actorRole: 'Admin',
+    );
+
+    expect(
+      repository
+          .getReportsForTechnician('new-technician')
+          .single
+          .assignedTechnicianUid,
+      'new-technician',
+    );
+    expect(
+      repository
+          .getReportsForTechnician(MockData.technicianUser.uid)
+          .any((report) => report.reportId == 'AT-2026-00125'),
+      isFalse,
+    );
+  });
+
+  test('assignment rejects missing technician data', () {
+    final repository = DataRepository();
+
+    expect(
+      () => repository.assignTechnician(
+        reportId: 'AT-2026-00125',
+        technicianUid: '',
+        technicianName: 'Unassigned',
+        adminName: 'Dispatcher',
+        actorRole: 'Admin',
+      ),
+      throwsA(isA<ValidationException>()),
+    );
+  });
+
+  test(
+    'offline/demo photo upload is rejected without changing the report',
+    () async {
+      final repository = DataRepository();
+
+      await repository.updateTechnicianJobStatus(
+        reportId: 'AT-2026-00128',
+        technicianUid: MockData.technicianUser.uid,
+        actorName: MockData.technicianUser.displayName,
+        newStatus: FaultStatus.ongoing,
+      );
+
+      expect(
+        () => repository.uploadTechnicianAfterRepairPhoto(
+          reportId: 'AT-2026-00128',
+          technicianUid: MockData.technicianUser.uid,
+          bytes: Uint8List.fromList([1, 2, 3]),
+          contentType: 'image/jpeg',
+        ),
+        throwsA(isA<PermissionException>()),
+      );
+      expect(repository.getReportById('AT-2026-00128')?.afterImageUrl, isNull);
+    },
+  );
+
+  test(
+    'invalid repair notes and image types fail before persistence',
+    () async {
+      final repository = DataRepository();
+
+      await repository.updateTechnicianJobStatus(
+        reportId: 'AT-2026-00128',
+        technicianUid: MockData.technicianUser.uid,
+        actorName: MockData.technicianUser.displayName,
+        newStatus: FaultStatus.ongoing,
+      );
+
+      expect(
+        () => repository.saveTechnicianRepairNotes(
+          reportId: 'AT-2026-00128',
+          technicianUid: MockData.technicianUser.uid,
+          actorName: MockData.technicianUser.displayName,
+          notes: 'x',
+        ),
+        throwsA(isA<ValidationException>()),
+      );
+      expect(
+        () => repository.uploadTechnicianAfterRepairPhoto(
+          reportId: 'AT-2026-00128',
+          technicianUid: MockData.technicianUser.uid,
+          bytes: Uint8List.fromList([1]),
+          contentType: 'text/plain',
+        ),
+        throwsA(isA<ValidationException>()),
+      );
+    },
+  );
 }

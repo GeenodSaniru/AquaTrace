@@ -1,5 +1,755 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 19:21:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 4/4: FINAL STATUS — Member 8 (notifications, push, report history)
+
+Branch `feature/notifications-history`. Closes Prompt 8C and the Member 8 scope (8A + 8B + 8C). Parts 1–3 of 8C are the entries below.
+
+### Final status by requirement
+| 8C requirement | Status | Evidence |
+|---|---|---|
+| FCM permission granted / denied | **Done (fakes)** — user-initiated prompt only; denial registers nothing; revoke-in-settings removes the token; re-grant re-registers | `notifications_unit_test.dart`, `notification_preferences_test.dart` (21), widget banner tests |
+| Token registration / refresh / removal | **Done (fakes)** — register, refresh replaces, remove on sign-out / push off / account switch / permission revoked; never for demo identities | same |
+| Foreground / background behaviour | **Code + fakes only** — foreground banner, tap and cold-start deep links tested; OS-rendered background/terminated pushes need a device + deployed backend (**environment blocker**) | widget + unit tests |
+| List loading, read/unread, mark-all-read | **Done** — loading / empty / error / retry, per-item and bulk read with rollback, badge = list | `notifications_widget_test.dart`, `notifications_layout_test.dart` |
+| Related-item navigation | **Done** — typed deep link; verification → verify screen for eligible citizens; technician → job; others → history; stale / unauthorised → unavailable | widget tests |
+| Complete report timeline | **Done** — Report Submitted → Report Verified → Technician Assigned → Repair Started → Repair Completed → Community Verification Confirmed ×3 → Community Verified → Dispute Raised, chronological, unique ids | `lifecycle_history_test.dart` + browser |
+| Events in the correct order for the correct recipients | **Done** — per-recipient inboxes asserted in Dart (demo backend) and in Node (real planners + delivery) with identical expectations; replay creates nothing | `lifecycle_history_test.dart`, `functions/test/lifecycle.test.js` |
+| Privacy | **Done** — generic OS push text, minimal data payload, no names / reasons in audit trail or push, owner-only tokens / preferences, links resolve from the user's own data | node + dart tests, rules contract tests |
+| Duplicate delivery | **Done** — deterministic / logical ids, `counted` markers, client de-dup window | node + dart tests |
+| Stale references, offline, missing timestamps | **Done** — see Part 3 and Part 2 | `notifications_layout_test.dart`, unit tests |
+
+### Bugs found and fixed in 8C (all reproduced by a test first)
+1. Admin approval never recorded **Report Verified** in the history.
+2. Technician steps were titled *Job Ongoing / Completed* instead of **Repair Started / Repair Completed**.
+3. Audit-event and demo-notification ids ordered wrongly on same-tick ties (unpadded counter).
+4. Demo mode produced no notification for submit / assign / start / complete.
+5. One event's notifications were created **in parallel**, so a later one could overtake an earlier one (inbox order wrong).
+6. Unconfirmed local audit events (null server timestamp) sorted to the **top** of the timeline.
+7. Notification list overflowed by 194 px at 2× text (banner in a fixed column); "Mark all read" overflowed the app bar by 35 px.
+8. Revoking OS notification permission left the device token registered.
+
+### Code issues vs deployment blockers
+**Code — all known defects fixed.** Nothing open in the app, rules or functions source that I could reproduce.
+
+**Firebase console / deployment / environment — cannot be done or verified from this repository:**
+1. Deploy `functions/`: `cd functions && npm install`, choose the region matching Firestore, Blaze plan, `firebase deploy --only functions --project aquatrace-92e2e`. The Firestore-backed glue in `functions/index.js` (`deliveryStore`, `countVerification` / `countDispute` transactions, lookups) has **never run** against Firebase.
+2. Deploy `firestore.rules` **with** the functions (vote / dispute documents, `settings/notifications`, `fcmTokens`, narrowed activity read). Not emulator-tested (no Java / Firebase CLI here); a Rules Playground / emulator pass is required.
+3. Run the verification plan in `functions/README.md` in the emulator or a staging project.
+4. iOS / macOS: APNs auth key in Firebase Console + Push Notifications capability (Apple Developer team). Web push (service worker + VAPID) is not configured.
+5. Physical-device check of permission prompt, token delivery, foreground / background / terminated rendering and taps.
+6. Optional: GPS-based "nearby" (currently profile area) and migration to the newer FCM `register()` API together with the backend.
+
+### Final checks (final tree, 2026-11-22, Windows 11, Flutter 3.47.4 / Dart 3.13.3, Node v24.19.0)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 91 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **249/249** (whole repository incl. Members 1–7) |
+| `npm test` (in `functions/`, `node --test`) | Pass — **61/61** |
+| `node --check index.js`, `delivery.js`, `notification_events.js` | Pass (syntax only) |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated |
+| `git diff --check` | Pass |
+| Browser, demo-mode preview of the final tree (temporary entrypoint, deleted, not committed) | Pass — Alerts list renders with the new scroll layout; Notification Settings shows the corrected footer; admin **Approve and assign** on AT-2026-00125 → Activity tab lists it first ("Updated Just now") → history shows **Report Verified** then **Technician Assigned** in order with the correct local time |
+
+### Handoff notes
+- **Backend contract:** `functions/README.md` is the single source (event table, document contracts, idempotency, delivery guarantees, preferences, push privacy, verification plan). `functions/test/contract.test.js` fails if the app's documents drift from `firestore.rules`.
+- **Demo vs production:** with Firebase *not* configured the repository plays the backend (demo-only, mirrors `functions/`); with Firebase configured the client never creates notifications.
+- **Other members:** *Member 7* — gateway writes only the vote / dispute document (functions count them); *Member 2* — Notification Settings footer string; *Member 5* — pre-existing debug ListTile assertion on the admin dashboard; *Members 3 / 6* — use `AppRouter.reportDetail` / `reportActivity` with the report id to reuse the deep-link destinations. Merging `origin/test` into this branch (8B) means a PR from it includes Member 6/7 commits.
+- **Commits (8C):** Part 1 `0962937`, Part 2 `0a69b5e`, Part 3 `5019b9b`, Part 4 this commit; none carries a Claude co-author trailer.
+
+### Git
+- Final 8C commit on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 19:16:09 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 3/4: client QA — accessibility, stale references, offline, FCM permission edge cases
+
+Branch `feature/notifications-history`. Builds on Parts 1–2.
+
+### Method
+New `test/notifications_layout_test.dart` (15 tests) drives the notification list, permission banner and activity history on a **320 px phone** at **1×, 1.3× and 2× text**, in **light and dark** themes, with long titles / bodies, a 100-item inbox, stale references and failing connections. Layout errors (RenderFlex overflow) fail a test on their own. The widget-test harness moved to `test/support/notification_harness.dart` so both widget test files share it.
+
+### Bugs found and fixed (all reproduced first)
+1. **Notification list overflowed at large text sizes** (accessibility "Extra Large" / OS 200%): the permission banner sat in a fixed `Column` above the list and pushed it **194 px past the screen**. The body is now one `CustomScrollView` (banner scrolls with the content; loading / empty / error states use `SliverFillRemaining`).
+2. **App-bar "Mark all read" overflowed the toolbar by 35 px** at 2× text. The action now follows the user's text size up to 1.2× (`MediaQuery.withClampedTextScaling`); the list content still scales fully.
+3. **Revoking notification permission in system settings left this device registered**: the token document stayed on the account and the backend kept targeting a device that can no longer show pushes. `refreshStatus` (also run when the app resumes) now removes the token and invalidates the device token when permission turns `denied`; re-granting registers a fresh token; refresh events while denied are ignored; a never-granted device has nothing to clean up.
+
+### Verified (test results, no defects found)
+- Touch targets ≥ 48 px with semantics labels ("Unread / Read notification. …"); unread badge count equals the list; a 100-item inbox scrolls to the end.
+- **Stale references:** a notification whose report no longer exists opens "Report unavailable" and is still marked read.
+- **Offline / connection lost after data loaded:** saved notifications stay visible with "Showing saved notifications. …" (no error screen); retry restores live data. **Mark-all-read offline:** failure is reported and unread state restored; works once back online.
+- **Missing timestamps:** unknown times are labelled "Time unavailable" and sorted last (list) / first (timeline); pending (unconfirmed) local audit events use the local clock (Part 2).
+- **Permission granted / denied, token register / refresh / remove:** covered in `notification_preferences_test.dart` (21 tests) and `notifications_unit_test.dart` — request is user-initiated only, denial registers nothing, refresh replaces the token, sign-out / account switch / push-off removes it, demo identities never register.
+
+### Files changed
+`lib/features/notifications/presentation/shared_notifications_view.dart`, `lib/features/notifications/services/push_messaging_service.dart`, `lib/features/notifications/services/in_memory_notification_gateway.dart` (`failStream` for tests), `test/notifications_layout_test.dart` (new), `test/support/notification_harness.dart` (new, extracted), `test/notifications_widget_test.dart`, `test/notification_preferences_test.dart` (+5), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **249/249** (229 + 20 new) |
+| `npm test` (in `functions/`) | Pass — **61/61** |
+
+### Environment-only limitations (not code defects)
+Foreground / background / terminated push rendering and cold-start taps need a physical device or emulator with a deployed backend; they are covered with fakes only.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 19:06:08 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 2/4: backend delivery path verified with fakes (order, replay, preferences, missing users)
+
+Branch `feature/notifications-history`. Builds on Part 1.
+
+### Why
+The Cloud Functions wiring had never been exercised (no Java / Firebase CLI here). The riskiest part — creating notifications, de-duplicating, honouring preferences, skipping deleted users, sending push — lived inside `index.js` tied to Firestore, so none of it was testable. It is now isolated and tested.
+
+### Completed
+- **`functions/delivery.js`** (new): `deliverNotifications` and `sendToTokens` with injected `store` / `messaging`; `index.js` now supplies Firestore / FCM implementations and delegates. Behaviour is unchanged except the ordering fix below.
+- **Bug found and fixed — notification order within an event.** The previous implementation created one event's notifications **in parallel** (`Promise.allSettled`), so a later notification could be stored (and timestamped) before an earlier one: e.g. the reporter could see *Report Approved* **newer** than *Technician Assigned*. Delivery is now sequential per recipient in planned (workflow) order, parallel across recipients. A test with a deliberately slow first notification fails under a parallel implementation.
+- **Server lifecycle replay** (`test/lifecycle.test.js`): submit → approve/assign → start → complete → 3 confirmations → dispute run through the real planners + delivery with an in-memory store. Every recipient's newest-first inbox equals the lists asserted by the Dart demo-backend test (`test/lifecycle_history_test.dart`), so demo and backend behaviour cannot drift apart silently. The reporter and technician are never asked to verify; a 4th confirmation does not repeat the milestone; the function's own counter / status update re-triggers nothing.
+- **Replay / duplicate delivery:** replaying every event changes nothing (all `existing`, no second push); different trigger events for the same logical dispute share one notification.
+- **Failure isolation:** failed push does not fail delivery or block later items; failed create for one recipient does not block others; deleted users skipped; preferences (category off → no record, push off → record without push).
+- **Push tokens:** only `registration-token-not-registered` / `invalid-registration-token` remove a token; transient FCM errors keep it; the FCM message never carries the in-app body or the recipient uid.
+- **Client: pending server timestamps.** A history event written by this device but not yet confirmed has a `null` server timestamp in the local snapshot; it was treated as "unknown time" and **sorted to the top of the timeline**, then jumped into place. `activityEventFromDocument` uses the local clock while the write is pending (confirmed documents with a missing time stay "unknown"; real timestamps are never replaced).
+
+### Files changed
+New: `functions/delivery.js`, `functions/test/delivery.test.js`, `functions/test/lifecycle.test.js`. Modified: `functions/index.js`, `functions/README.md` (delivery guarantees), `lib/features/notifications/services/notification_gateway.dart`, `test/notifications_unit_test.dart` (+3 tests), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **229/229** (226 + 3 new) |
+| `npm test` (in `functions/`) | Pass — **61/61** (43 + 18 new) |
+| `node --check functions/index.js`, `delivery.js` | Pass (syntax only; Firebase wiring still **not** run against Firebase) |
+
+### Still true
+`functions/` is not deployed and not emulator-tested; the Firestore-backed `deliveryStore` in `index.js` (≈25 lines) is the only untested glue.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 19:02:32 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 1/4: lifecycle history audit (order, titles, recipients)
+
+Branch `feature/notifications-history` (clean and in sync with `origin` at start; no new commits on `origin/main` / `origin/test` since 8B). Prompt 8C is delivered in four parts, each committed and pushed when finished.
+
+### Preflight
+- Re-read `README.md`, `docs/MEMBER1_HANDOFF.md`, `functions/README.md`, `AquaTrace_Member_Prompts.md` (8C), the full `update.md`, and the Git state.
+- UI reference: `docs/AquaTrace UI.pdf` (contact sheet + `docs/ui_pdf_extracted_text.txt`): notification list ("New 2" / "Earlier", "Mark all read"), notification examples (Technician Assigned, Verify Repair, Report Approved, Dispute Opened) and the admin **Activity History** timeline (Report Submitted → Report Verified → Technician Assigned → Repair Started → Repair Completed → Community Verified). Proposal (`docs/12_Proposal.pdf`, decoded): "notifications when … a new technician assignment, report status update, or dispute" and "a complete status and activity history … from initial submission through final resolution".
+
+### Method
+Drove the **real** `DataRepository` through the whole lifecycle (submit → admin verifies + assigns → repair started → completed → three community confirmations → dispute) and compared the resulting timeline and every recipient's inbox against the design and the backend rules (`test/lifecycle_history_test.dart`, 10 tests).
+
+### Bugs found and fixed (all reproduced by the new test first)
+1. **No "Report Verified" step.** The admin approve-and-assign action wrote only *Technician Assigned*, so the "admin verified" event the design shows was missing from every report's history. Approving a *pending* report now records *Report Verified* then *Technician Assigned* (re-assigning a disputed report is not a fresh verification).
+2. **Wrong titles for technician steps:** *Job Ongoing* / *Job Completed* → **Repair Started** / **Repair Completed** (as in the design), with the design's descriptions.
+3. **Audit-event ordering ties:** ids were `act-<µs>-<n>` with an unpadded counter, so on a coarse clock (web has millisecond resolution) events created in one tick sorted wrongly once the counter crossed 9 → 10 (`…-10` < `…-9`). Ids are now fixed width (`act-<17 digits>-<6 digits>`); technician events (which used a bare microsecond id and could collide) use the same scheme.
+4. **Notification ordering ties (demo backend):** same unpadded-counter problem made newer notifications sort *below* older ones (e.g. the technician saw *Repair Verified by Community* above the later *Repair Disputed*). Demo ids are fixed width.
+5. **Demo mode showed no notification for assignment / repair started / completed / new report** (only Member 7's events did), so "events reach the correct recipients" could not be checked without a backend. The demo backend now mirrors `functions/` for those events using the same titles and texts (new report → admin; approved + assigned → reporter, job → technician; started → reporter; completed → reporter *informed*, admin, and a same-area neighbour asked to *Verify Repair*). Demo-only; real clients still never create notifications.
+
+### Verified (test results)
+- History order: Report Submitted → Report Verified → Technician Assigned → Repair Started → Repair Completed → 3 × Community Verification Confirmed with **Community Verified** after the third → Dispute Raised; timestamps non-decreasing, unique ids, actors/roles correct, no unknown times.
+- Recipients (newest first): reporter ← Dispute Opened, Repair Verified, Repair Completed, Repair Started, Technician Assigned, Report Approved (never *Verify Repair*); technician ← Repair Disputed, Repair Verified by Community, New Job Assigned; admin ← Dispute Raised, Repair Verified by Community, Repair Completed, New Report Submitted; neighbour ← Verify Repair; disputing resident ← Dispute Submitted only; bystanders ← nothing. All reference the right report and are unread.
+
+### Files changed
+`lib/core/services/data_repository.dart` (history steps, titles, padded ids, demo notifications), `test/lifecycle_history_test.dart` (new), `test/notifications_widget_test.dart` (one assertion updated for the extra *Report Verified* event), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **226/226** (216 + 10 new) |
+
+### Next (Parts 2–4)
+Backend delivery path tested with fakes (ordering, replay, preferences, missing users), stale / offline / missing-timestamp / accessibility QA, FCM permission-revoked edge, then final QA, browser launch and handoff.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:25:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 4/4: final QA, event-flow verification, docs and handoff
+
+Branch `feature/notifications-history`. Closes Prompt 8B (Parts 1–3 are the entries below).
+
+### What 8B delivered (summary of Parts 1–4)
+| Requirement | Outcome |
+|---|---|
+| Integrate with real events from Members 3, 5, 6, 7 | Member 6/7 work merged from `origin/test`; server triggers for report created, approved/assigned, repair started/completed, community verification and dispute; Member 7's client-side notification inserts replaced (demo-only delivery, real clients never create notifications) |
+| Correct report/job and recipient UID | Recipients derived from the report (`reporterUid`, `assignedTechnicianUid`), admins by role, nearby citizens by service area; reporter is not asked to verify their own repair; typed deep link carries `reportId` + `type` |
+| Prevent duplicates | Deterministic ids from the trigger event id; logical ids for milestone / dispute; `counted` markers; single source for dispute notifications; client de-duplicates repeated push delivery within 5 s |
+| Chronological history, immutable audit events | Client sorts by parsed timestamp (Timestamp + ISO tolerated, unknown time first); rules: activity `update, delete: false`; server appends with deterministic ids via `create()`; contract test asserts no client code updates/deletes activity |
+| Deleted / invalid references | Deleted report or user, blank uids, votes on non-completed repairs skipped server-side; app shows "Report unavailable" / "Sign in required" / invalid-link states |
+| Token refresh / removal, preferences | Tokens register after a user-initiated grant, refresh replaces, removed on sign-out / push off / account switch; Settings switches mirrored to `/users/{uid}/settings/notifications` and honoured by the backend |
+| Push payload privacy, authenticated navigation | OS text is generic (`Report <id>. Open AquaTrace for details.`), data = `{notificationId, reportId, type}` only; links resolve from the signed-in user's own data |
+| Trusted Cloud Functions | `functions/` reference implementation + exact contracts (`functions/README.md`) — **not deployed** |
+
+### Verified in this part
+- Full QA on the final tree (below), including a release web build of `lib/main.dart`.
+- **Browser, demo-mode preview** (temporary entrypoint, deleted, not committed): the demo citizen's **Verify Repair** notification opens Member 7's *Community Verification* screen for AT-2026-00126; a **Report Approved** notification opens the report's *Activity History* (empty-state for a report with no events); list, read state and bell badge behave as in 8A. (The Browser pane's click coordinates scale with the viewport; clicks were re-aimed accordingly.)
+- Event → notification → read state → deep link → history is covered end to end by tests: dispute / milestone delivered to each recipient's own inbox (and nobody else's), milestone once only, tap marks read and opens the right destination by type and role, history stays chronological with live appends.
+
+### Docs
+- `README.md` §6.2a (status table), `functions/README.md` (event table, idempotency, contracts, preferences, privacy, verification plan), `docs/MEMBER1_HANDOFF.md` (admin Activity tab note refreshed).
+- `functions/index.js`: skip the admin-list lookup when a report update changes no status.
+
+### Checks (final tree, 2026-11-22, Windows 11, Flutter 3.47.4 / Dart 3.13.3, Node v24.19.0)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 88 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **216/216** (merged suite incl. Members 1–7, plus all Member 8 tests) |
+| `npm test` (in `functions/`, `node --test`) | Pass — **43/43** (31 logic + 12 contract) |
+| `node --check functions/index.js` and `notification_events.js` | Pass (syntax only) |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated |
+| `git diff --check` | Pass |
+
+### Outstanding backend requirements (nothing below is deployed or verified live)
+1. `cd functions && npm install`; set the region to match Firestore; Blaze plan; `firebase deploy --only functions`.
+2. Deploy `firestore.rules` **together with** the functions (vote / dispute documents are accepted by the new rules and counted only by the functions).
+3. Run the emulator / staging verification plan in `functions/README.md` — the transactions, idempotent replays and preference reads in `index.js` have **not** been executed against Firebase (no Java / Firebase CLI on this machine). `firestore.rules` changes are likewise untested in the emulator.
+4. iOS / macOS: APNs auth key + Push Notifications capability (Apple Developer team). Web push (service worker + VAPID) not configured.
+5. Optional production hardening: geo-index for "nearby" (currently profile area); migrate to the `register()` / `onRegistered` FCM API together with the backend.
+
+### Not verified / honest limitations
+- **No push was ever delivered:** no device/emulator, no deployed backend. Permission, token and tap handling are verified with fakes and widget tests only.
+- Preference mirroring and server-side honouring are verified by unit/contract tests, not against a live project.
+- Dispute / verification flow in the real app additionally needs GPS (Member 7's 5 km rule); in the browser demo the location is denied, so voting itself was verified by tests, not by hand.
+
+### Items for other members
+- **Member 7:** `FirebaseCommunityVerificationGateway` now writes only the vote / dispute document (counters, status flip and audit events are applied by the functions); three assertions in `community_verification_test.dart` now read per-recipient inboxes.
+- **Member 2:** one string in Notification Settings (footer) corrected.
+- **Member 5:** pre-existing debug assertion "ListTile background color…" on the admin dashboard quick actions (unchanged).
+
+### Git
+- Fourth and final 8B commit on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:14:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 3/4: notification preferences, token lifecycle and client hardening
+
+Branch `feature/notifications-history`. Builds on Parts 1–2.
+
+### Completed
+- **User notification preferences, end to end.** `NotificationPreferencesSync` mirrors the Settings switches to `/users/{uid}/settings/notifications` (`pushEnabled` ← *Report Updates*, `repairVerification`, `nearbyFaults`) so the backend (Part 2 `applyPreferences`) can honour them. Written only for the signed-in user with a real Firebase session (never for demo identities / signed out), unchanged values are not re-written, a failed write is retried (bounded) and the latest choice wins. New owner-only rules for that one document (booleans + server `updatedAt`).
+- **Token lifecycle verified and tested** (from 8A, re-audited here): register only after a user-initiated permission grant, replace on refresh (old token removed), remove on sign-out / push switched off / account switch (device token invalidated so the previous account cannot reach the device), never register for demo identities, refresh events ignored while signed out or suspended.
+- **Duplicate delivery on the client:** the same push reported twice within 5 s (e.g. cold-start `getInitialMessage` + `onMessageOpenedApp`, or a platform retry) shows one banner / navigates once; legitimately re-opening a notification later still works; messages without any id are never dropped. Inbox documents are keyed by id, so a re-delivered notification never appears twice.
+- **Navigation requires authentication / authorization** (re-verified, tests): signed-out → "Sign in required"; reports resolve only from the user's own data (technician sees only assigned jobs, others the history); a verification link opens the verify screen only for an eligible citizen; unknown / deleted / malformed ids → "unavailable".
+- **Settings copy made truthful:** the Notification Settings footer said push/email "are not connected"; it now says what is true (Report Updates controls push on this device, Repair Verification is shared with the account, Nearby Faults alerts and weekly email are not connected). *Member 2 — one string in `profile_settings_screens.dart`, please review.*
+
+### Bugs found and fixed
+- Account switched while a preferences write was in flight → the new user's preferences were never written (found by a test). The in-flight handling now always re-syncs for the current user.
+
+### Files changed
+New: `lib/features/notifications/services/notification_preferences_sync.dart`, `test/notification_preferences_test.dart`. Modified: `push_messaging_service.dart` (duplicate suppression, injectable clock), `lib/main.dart` (wiring), `firestore.rules` (settings document), `functions/README.md`, `functions/test/contract.test.js` (preferences ↔ rules ↔ backend contract), `profile_settings_screens.dart` (copy), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **216/216** (+16 new: preferences sync, push de-duplication) |
+| `npm test` (in `functions/`) | Pass — **42/42** |
+
+### Not done / blockers
+- Preference mirroring and the server honouring them are **not verified against a live Firebase project**; the settings rules are not deployed or emulator-tested.
+- The Settings screen has one "Report Updates" switch that is the push switch; there is no separate "hide report-update records" control, so in-app records for report updates are always kept.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:09:50 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 2/4: server-side workflow triggers, aggregation, dedupe and push privacy
+
+Branch `feature/notifications-history`. Builds on Part 1 (merge of Member 6/7 work).
+
+### Completed
+- **Trusted event coverage** (`functions/`): triggers for every workflow event — report created (Member 3), approved / assigned / repair started / completed (Members 5, 6), community **verification** and **dispute** documents (Member 7). Full "event → writer → trigger → result" table in `functions/README.md`.
+- **Aggregation moved to the server** (`onVerificationCreated`, `onDisputeCreated`): counts the vote/dispute in a transaction, sets `disputed`, appends audit events, announces the community milestone on the vote that *reaches* the threshold only. Idempotent via `counted` / `countedAs` markers.
+- **Duplicate prevention:** deterministic ids from the trigger event id; **logical ids** for milestone / dispute notifications (stable across retries and across triggers); deterministic audit-event ids with `create()`; the report-update trigger emits nothing for `→ disputed` (single source) and counter bumps never re-notify.
+- **Correct recipients / no self-verification:** the reporter now gets an informational *Repair Completed* (Member 7's rules forbid verifying your own report); the PDF's *Verify Repair* request goes to citizens in the report's service area (capped at 50, de-duplicated, excluding reporter / technician / admins).
+- **Invalid references handled:** deleted report or user, blank uids, vote on a report that is no longer completed (marked `rejected`) are skipped without errors.
+- **Preferences honoured server-side** (`applyPreferences`): category off drops the record and push; `pushEnabled: false` keeps the in-app record only. 
+- **Push payload privacy:** OS-visible text is now generic (`Report <id>. Open AquaTrace for details.`) with no names, addresses, reasons or uids; the data block is exactly `{notificationId, reportId, type}`.
+- **Audit trail privacy:** server-written dispute / verification events contain no voter name or dispute reason (activity is readable by all citizens).
+
+### Bugs found and fixed
+- **App ↔ rules mismatch (Member 7):** the app writes vote/dispute documents with `voterName` / `evidenceImageUrl` and directly updates report counters, status and activity; `firestore.rules` rejected all of that (fixed key list; counters reserved for functions), so voting/disputing could never succeed against the deployed rules. Fixed on both sides: rules now accept the real documents (and disputes on an already `disputed` report), and `FirebaseCommunityVerificationGateway` writes **only** the vote/dispute document (the functions do the rest). A static contract test fails if app fields drift from the rules again — it fails against the previous rules (`rules reject vote field "voterName"`) and passes now.
+- `ReportModel`, `VerificationVoteModel`, `DisputeRecordModel` read Firestore `Timestamp` values as "now" (server-written `updatedAt` / `createdAt` would have mis-sorted reports). They now use the tolerant parser from 8A.
+- Nearby-citizen cap was applied before de-duplication (found by a test) → now de-duplicated first.
+
+### Files changed
+`functions/{index.js, notification_events.js, README.md, test/notification_events.test.js, test/contract.test.js}`, `firestore.rules`, `lib/core/models/{report_model,verification_vote_model,dispute_record_model}.dart`, `lib/core/services/community_verification_gateway.dart` (**Member 7 — please review**: removed the report-counter / activity writes the rules forbid), `test/notification_events_test.dart`, `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **200/200** |
+| `npm test` (in `functions/`) | Pass — **40/40** (31 logic + 9 contract) |
+| `node --check functions/index.js` | Pass (syntax only — **not** run against Firebase) |
+
+### Not done / blockers
+- `functions/` is **not deployed and not emulator-tested** (no Java / Firebase CLI here); `firestore.rules` changes are not deployed or emulator-tested. Replay / duplicate behaviour is proven for the pure logic only; the transactions in `index.js` need the emulator plan in `functions/README.md`.
+- "Nearby" for *Verify Repair* is the profile area, not GPS.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:02:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 1/4: sync with team work and reconcile workflow events
+
+Branch `feature/notifications-history`. Prompt 8B is delivered in four parts, each committed and pushed when finished (Part 1 below; Parts 2–4 are appended above this entry as they land).
+
+### Preflight
+- Re-read `README.md`, `docs/MEMBER1_HANDOFF.md`, `functions/README.md`, `AquaTrace_Member_Prompts.md` (8B), and `update.md` (including Member 6/7 handoffs); inspected rules, functions, FCM setup and the UI reference (`docs/AquaTrace UI.pdf` contact sheet + `docs/ui_pdf_extracted_text.txt`: notification list, notification examples, admin Activity History).
+- `git fetch`: `origin/main` has no new commits. Member 7's community verification / dispute work and Member 6's technician security fixes live on `origin/test` (13 commits, not yet in `main`). Members 3 and 5 are already in `main`.
+
+### Completed
+- **Merged `origin/test` into this branch** (the real Member 6 + Member 7 workflow code that notifications must integrate with). Conflicts resolved in `data_repository.dart` (both feature sets kept), `shared_notifications_view.dart` (my list kept; their "verification → verify screen" tap behaviour re-implemented below) and `update.md` (both logs kept).
+- **Contract audit finding (fixed):** Member 7's repository inserted notifications into an in-memory list addressed to *other* users' uids and hard-coded the demo admin uid. With Firestore those records were never persisted or delivered. They now go through `_demoNotify`, which only delivers in demo mode (no backend) into the **recipient's own inbox**, and does nothing when a real notification gateway is in use (the backend creates them — see Part 2). A spy-gateway test proves a real-gateway client performs zero writes.
+- **Typed deep link:** `ReportLinkArgs(reportId, type)` / push payload `type`. A `verification` notification for a *completed* repair opens Member 7's `CitizenVerificationScreen` only for a citizen who is neither the reporter nor the assigned technician; the assigned technician still gets Job Details; everyone else gets Activity History. Stale links (repair no longer completed) fall back to history. The legacy string argument still works.
+- **Unique audit ids** for Member 7's verification / dispute activity events (they used millisecond ids, same collision as in 8A).
+- Milestone ("Community Verified") notifications are sent once, not on later votes (test).
+
+### Changes to other members' files (please review)
+- `lib/core/services/data_repository.dart` — merge resolution; Member 7's `_notifications.insert(...)` blocks replaced by `_demoNotify(...)`.
+- `test/community_verification_test.dart` — 3 assertions read the old shared in-memory notification list; they now read each recipient's own inbox (`inboxOf` helper). No other test logic changed.
+
+### Checks (2026-11-22, Windows 11, Flutter 3.47.4 / Dart 3.13.3)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 86 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **197/197** (merged suite incl. Member 6/7 tests, 150 from 8A, +13 new in this part) |
+
+### Found for Part 2 (not fixed yet)
+- Member 7's `FirebaseCommunityVerificationGateway` writes vote/dispute documents with extra fields (`voterName`, `evidenceImageUrl`) and updates `verificationCount` / `disputeCount` / `status` / activity directly. `firestore.rules` allow only a fixed key set on those documents and reserve counters / the `disputed` flip for Cloud Functions, so this path is rejected by the rules as written. Part 2 aligns the rules and adds the server-side aggregation + notification triggers.
+
+### Git
+- Merge commit on `feature/notifications-history`; no Claude co-author trailer. Hash and push result are in the hand-off message.
+
+## 2026-11-21 11:04:29 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8A: notifications, FCM client and report activity history
+
+Branch: `feature/notifications-history` (from `main` @ `353ee30`). Module code: `lib/features/notifications/`.
+
+### Preflight
+- Read `README.md`, `docs/MEMBER1_HANDOFF.md`, `AquaTrace_Member_Prompts.md`, this file, `firestore.rules`, `pubspec.yaml`, and the data/auth/router/shell code.
+- UI PDF located at `docs/AquaTrace UI.pdf`. The PDF is one Figma frame; I inspected the rendered contact sheet (`docs/ui_overview.png`, `docs/crop_*.png`) plus `docs/ui_pdf_extracted_text.txt` for the citizen / technician / admin **Notifications** ("New 2" / "Earlier", "Mark all read"), admin **Activity History** timeline, and the dashboard bell badge. I did not invent screens beyond those.
+- Baseline before changes: `flutter analyze` clean; `flutter test` 70/70.
+
+### Completed
+- **Notification list** (`shared_notifications_view.dart`): New / Earlier sections with unread count, unread dot, relative timestamps (tooltip = full date), loading / empty / error+retry states, semantics labels, tap = mark read + open the related report/job, "Mark all read".
+- **State** (`NotificationStore`, `NotificationGateway`): live Firestore stream of `/users/{uid}/notifications` (newest first, limit 100); optimistic mark-one / mark-all (batched) with rollback + user message on failure; no redundant writes; inbox is cleared on user change (no leaking between accounts). `DataRepository` keeps its existing notification API and delegates to the store.
+- **Deep links**: new routes `/reports/detail` and `/reports/activity`. `ReportLinkScreen` resolves the report from the signed-in user's own data: assigned technician → existing Job Details; everyone else → Activity History; invalid id / signed out / deleted or inaccessible report → explicit "unavailable" state. Ids from payloads are validated (`sanitizeReportId`).
+- **Report activity history** (`ActivityHistoryScreen`): chronological audit trail (oldest first, stable tie-break), design-faithful timeline (icon, `24 Sep 2026 – 10:32 AM`, title, description, actor), status badge, and the "Community Verified ✓" card driven by the real `verificationCount`. Admin **Activity** tab is now a report picker (`ActivityHubView`) → history (previously it duplicated the notification list).
+- **FCM client** (`PushMessagingService`, `firebase_messaging ^17.1.0`): user-initiated permission request (never automatic), token register / refresh (old token removed) / remove at `/users/{uid}/fcmTokens/{token}`, removal + device-token invalidation **before sign-out** (`AuthProvider.beforeSignOut` hook) and when the user switches the "Push Notifications" preference off, foreground in-app banner, background/terminated tap + cold-start handling (pending link opens after sign-in), permission banner (enable / blocked→open settings / registration problem→retry). Web/desktop and demo mode report "unsupported" and register nothing.
+- **Trusted notification creation**: `firestore.rules` now denies **every** client create on notifications (previously any admin client could); clients may only flip `isRead`. New `functions/` reference Cloud Functions (`onReportCreated`, `onReportUpdated`) + pure decision logic for: report approved/verified, technician assigned, repair started/completed, dispute opened, new-report admin alert. Deterministic notification ids make trigger retries idempotent. Full contract in `functions/README.md`.
+- **Rules**: owner-managed `fcmTokens` rules; activity read narrowed to the same audience as the parent report (admin / citizen / assigned technician).
+- **Platform config**: Android `POST_NOTIFICATIONS`; iOS `UIBackgroundModes: remote-notification`; `firebase.json` `functions` block; README §4.4/4.5/6.2a.
+- **Demo data**: with Firebase *not* configured, each demo role gets its own notifications (labelled demo data in code). With Firebase configured, demo identities have no Auth session → empty inbox, no token (same rule as reports).
+
+### Bugs found and fixed
+- `NotificationItem.fromMap` / `ActivityTimelineEvent.fromMap` turned a Firestore **Timestamp** into "now" (so every server-written notification would show "just now" and mis-order). Now parsed correctly; missing/invalid times are "unknown" (labelled "Time unavailable", sorted last) instead of fabricated.
+- Relative time showed "0m ago" and could go negative with clock skew → "Just now".
+- Activity event ids used millisecond precision → two events in one tick overwrote each other (and would be rejected by the append-only rules). Now unique.
+- Header bell: the unread badge sat on top of the bell and **swallowed taps** (found while verifying in the browser). Badge is now `IgnorePointer`; tooltip announces the unread count.
+- Header bar: three-line header (admin dashboard) overflowed by 2 px → taller `preferredSize` when `secondarySubtitle` is set.
+- My own regression, caught in QA: moving the admin "Activity" tab onto tab 3 broke the dashboard bell (it called `onNavigateTab(3)`). The bell now opens the notification list.
+
+### Files changed
+New: `lib/features/notifications/{notification_navigation.dart, presentation/{activity_history_screen,notification_formatters,push_permission_banner,report_link_screen}.dart, services/*.dart}`, `lib/core/models/firestore_time.dart`, `functions/*`, `test/notifications_unit_test.dart`, `test/notifications_widget_test.dart`, `test/support/notification_fakes.dart`.
+Modified (Member 8 module): `shared_notifications_view.dart`, `notification_item.dart`, `activity_timeline_event.dart`, `firestore.rules`, `README.md`.
+Modified (**shared files — owners please review**, all minimal/additive): `lib/main.dart` (wiring, `scaffoldMessengerKey`), `lib/core/services/data_repository.dart` (notification section, `watchReportHistory`, unique activity ids), `lib/core/navigation/app_router.dart` (+2 routes), `lib/core/navigation/navigation_service.dart` (+`messengerKey`), `lib/features/auth/providers/auth_provider.dart` (+`beforeSignOut`), `lib/features/admin/presentation/admin_main_shell.dart` (Activity tab + bell), `lib/core/widgets/app_header_bar.dart` (badge / tooltip / height), `test/widget_test.dart` (one assertion: the inbox is per signed-in user), `pubspec.yaml` / `pubspec.lock`, `macos/Flutter/GeneratedPluginRegistrant.swift` (regenerated by adding the plugin), `firebase.json`, `android/.../AndroidManifest.xml`, `ios/Runner/Info.plist`.
+
+### Checks run (all on this machine, 2026-11-21, Windows 11, Flutter 3.47.4 / Dart 3.13.3, Node v24.19.0)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 77 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **150/150** (70 existing + 46 unit + 34 widget) |
+| `npm test` (in `functions/`, `node --test`) | Pass — **14/14** (notification decision logic) |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated |
+| `git diff --check` | Pass (only LF→CRLF notices) |
+| Browser run, real `lib/main.dart` release build (Firebase configured) | Pass — app starts, `firebase_messaging` plugin loads, no console errors; demo citizen sees the empty Alerts state (no Auth session) |
+| Browser run, demo-mode preview (temporary entrypoint, **not committed**) | Pass — citizen: New 2 / Earlier, unread dots, tap marks read + opens Activity History (timeline order + Community Verified card), Mark all read, sign-out hook; admin: bell badge 2 → notification list, Activity tab hub |
+
+Test coverage highlights: permission denied / granted / unsupported / plugin failure; token register, refresh, removal on sign-out / preference off / account switch; no token for demo identities; deep links from list, push tap, cold start (pending until sign-in), foreground banner action, malformed ids; read / unread / mark-all incl. failure rollback; history ordering (incl. unknown times and live append); Timestamp vs ISO parsing.
+
+### NOT done / blockers (be explicit — nothing below is claimed to work)
+- **Push is not verified end to end.** No Android/iOS device or emulator was available; FCM permission, token delivery, foreground/background rendering and cold-start taps are covered by fakes and by code review only, not on hardware.
+- **`functions/` is not deployed and not run in the Firebase emulator.** Needs: `cd functions && npm install`, set region to match the Firestore location, Blaze plan, `firebase deploy --only functions`. Until then no server-side notification or push is produced in the live project.
+- **`firestore.rules` changes are not deployed and not emulator-tested** (no Java/Firebase CLI on this machine). Deploy + Rules Playground check required (notable: client create on notifications is now denied; `fcmTokens` rules; narrower activity read).
+- iOS/macOS: needs an APNs auth key uploaded in Firebase Console and the Push Notifications capability / `aps-environment` entitlement (Apple Developer team) — not committed. Web push (service worker + VAPID key) is not configured.
+- The deprecated-but-supported FCM token API (`getToken` / `onTokenRefresh` / `deleteToken`) is used on purpose; `firebase_messaging` 17 offers `register()` / `onRegistered` (Installation-ID based). Migrating needs a matching backend change.
+- Events only the server can know (**community verified**, **dispute opened** activity entries) are Member 7's to append; the contract is in `functions/README.md`.
+- Left for 8B/8C: per-category notification preferences wired to delivery, payload privacy review on real devices, duplicate-delivery checks against a live backend.
+
+### Notes for other members
+- Member 2: Settings still says push is "not connected" — it is now partially connected (the Push Notifications switch registers / removes this device's token). Copy not changed (your module).
+- Member 5: pre-existing debug assertion "ListTile background color or ink splashes may be invisible" from the admin dashboard quick actions (ListTile inside a coloured `DecoratedBox`); not changed.
+- Member 6 / 7: link to `AppRouter.reportDetail` / `AppRouter.reportActivity` with the report id to reuse the deep-link destinations.
+
+### Git
+- Committed on `feature/notifications-history`; only Member 8 task files staged (the temporary preview entrypoint was deleted, not committed). The commit hash and push result are reported in the hand-off message (a log entry cannot contain its own hash).
+## 2026-11-21 09:38:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Final Verification QA, Release Build & Handoff
+
+### Completed
+- Completed final QA, release build validation, and handoff documentation for Community Verification & Dispute Management:
+  - Verified full production release build for Web (`flutter build web --release --no-wasm-dry-run`).
+  - Executed complete project-wide test suite across all 8 modules (**104/104 tests passing** with 0 failures).
+  - Executed static analysis across repository (**0 errors, 0 warnings**).
+  - Validated code formatting across all files.
+
+### Configured Assumptions & Architecture Defaults
+1. **Verification Radius**:
+   - **Default: 5.0 km**. In Sri Lankan municipal contexts (e.g. Colombo Municipal Council), a 5.0 km radius encompasses contiguous neighborhood water feeder loops and pressure zones while preventing remote gaming.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(radiusKm: ...)` and resettable via `resetDefaults()`.
+2. **Milestone Confirmation Threshold**:
+   - **Default: 3 independent community confirmations**. Once 3 eligible citizens independently confirm resolution, the report milestone transitions to "Community Verified" and celebration notifications are dispatched to the reporter, assigned technician, and admin workflow.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(threshold: ...)` and resettable via `resetDefaults()`.
+3. **Strict Eligibility & Conflict of Interest Guards**:
+   - Only authenticated citizens (`UserRole.citizen`) can verify or dispute.
+   - Original reporter cannot verify or dispute their own report.
+   - Assigned field technician cannot audit or verify their own repair work.
+   - Duplicate voting is strictly blocked per user per report.
+4. **Concurrency & Race Condition Protection**:
+   - In-memory atomic submission locking (`_submissionsInFlight`) prevents double-voting races and concurrent submission anomalies.
+
+### Unresolved Backend & Cloud Dependencies
+- **Firebase Cloud Functions**: Production automatic counter triggers and server-side push notifications require Cloud Functions deployment (event payload contracts defined in `DataRepository`).
+- **Firestore Security Rules**: Rules for verification/dispute collections (`/reports/{reportId}/verifications/{voterUid}` and `/reports/{reportId}/disputes/{voterUid}`) are defined in `firestore.rules` and should be deployed via `firebase deploy --only firestore:rules` when production deployment is initiated.
+- **Physical Hardware**: Mobile GPS sensor permissions and physical camera picker behavior rely on runtime device/OS permissions; verified in unit/widget tests via injected mock providers.
+
+### Handoff Notes for Member 8 (Notifications & History)
+- Community verification and dispute actions dispatch typed notification events (`verification`, `dispute`) through `DataRepository`.
+- All verification and dispute actions append immutable events to the report activity timeline (`ActivityTimelineEvent`), ready for Member 8's FCM push triggers and chronological timeline presentation.
+- Member 7 scope is 100% complete across community verification and dispute modules.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+| `flutter test` | Pass — 104/104 tests green across the entire repository. |
+| `flutter build web --release --no-wasm-dry-run` | Pass — `build/web` generated. |
+
+## 2026-11-21 09:35:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Verification Regression Suite & Defect Hardening
+
+### Completed
+- Authored comprehensive verification regression test suite in `test/community_verification_test.dart` (expanded from 16 to 26 unit and widget tests):
+  - Unauthenticated user rejection: verifies `checkEligibility` blocks unauthenticated (`null`) users with clear sign-in guidance.
+  - Unavailable GPS / location coordinates: validates rejection when latitude or longitude is null.
+  - Dispute validation: enforces mandatory non-empty dispute reason and rejects oversized (>10 MB) evidence images.
+  - Stale / non-existent report resilience: throws `DatabaseException` when attempting verification or dispute on non-existent reports.
+  - Gateway & network error handling: verifies simulated network failures during Firestore or Storage writes do not leave local report states dirty, mutate vote counts, or leak in-flight concurrency locks.
+  - In-flight submission concurrency: verifies `_submissionsInFlight` lock prevents simultaneous parallel submissions for the same report and voter.
+  - Full end-to-end lifecycle verification:
+    - Initial completed report audited by nearby citizens.
+    - Confirmations 1 and 2 increment `verificationCount` with voter record persistence.
+    - 3rd confirmation automatically logs the `Community Verified` milestone and dispatches celebrations to reporter, technician, and admin.
+    - Subsequent citizen dispute reopens report to `FaultStatus.disputed` and alerts all stakeholders.
+    - Admin reviews dispute in `AdminReportsView` and reassigns report to a new technician, cleanly progressing status back to `FaultStatus.assigned`.
+  - Widget tests for `CitizenVerificationScreen`:
+    - Renders "Community Verified ✓" celebration badge when the 3-confirmation threshold is satisfied.
+    - Renders action buttons "Confirm Repair Resolution" and "Raise Dispute (Report Ongoing Issue)" for eligible citizens.
+- Verified zero static analysis defects and cleanly formatted code across the entire repository.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted (0 changes needed). |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+
+### Outstanding
+- Full repository release build verification (`flutter build web --release`), complete repository test suite pass (104+ tests), final documentation of configured radius/threshold assumptions and unresolved backend dependencies, and handoff completion.
+
+## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Report Lifecycle Integration & Community Dispute Management
+
+### Completed
+- Completed report lifecycle integration for community verification and disputes:
+  - Valid dispute handling: submitting a dispute against a completed repair automatically moves the case into `FaultStatus.disputed` (reopened), records an auditable timeline event in `activityTimeline`, and notifies:
+    - Admin workflow (`demo-admin-003`) for review and reassignment
+    - Assigned technician regarding the dispute on their completed repair
+    - Original reporter that their report has been disputed and reopened
+    - Disputing citizen confirming their dispute submission was recorded
+  - Successful verification: recorded with unique voter identity (`VerificationVoteModel`), double-counting prevented via atomic in-memory concurrency locks (`_submissionsInFlight`) and duplicate vote guards.
+  - Verification milestone notifications: upon reaching the 3-confirmation threshold, automatically dispatches milestone celebrations to original reporter, assigned technician, and admin workflow.
+  - Configurable parameters & documented assumptions:
+    - Proximity Radius: default 5.0 km (covers municipal contiguous water distribution segments in Sri Lanka, e.g. Colombo Municipal Council); runtime configurable via `CommunityVerificationService.configure(radiusKm: ...)`.
+    - Verification Threshold: default 3 confirmations (independent peer confirmations required for community verification milestone); runtime configurable via `CommunityVerificationService.configure(threshold: ...)`.
+    - Eligibility Assumptions: authenticated citizen role, reporter self-verification prohibited, assigned technician audit prohibited, completed status requirement, proximity radius requirement.
+  - Coordinated Admin dispute review with Member 5:
+    - Integrated community dispute counts, dispute reason/explanation cards, before/after evidence comparison, and a "View Community Verification Audit" CTA in `AdminReportsView`.
+    - Integrated with Member 8 notification system (`SharedNotificationsView`) routing directly to `/verify-repair`.
+- Executed QA suite: `dart format`, `flutter analyze` (0 issues), and `flutter test` across all unit and widget tests (including 16/16 verification tests).
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 16/16 tests green. |
+| `flutter test` | Pass — all tests green. |
+
+### Open Questions & Handoff Notes
+- In a production environment with multi-instance backend or Cloud Functions, `_submissionsInFlight` should be supplemented with Firestore transaction isolation rules and backend Cloud Functions triggers (already mirrored in `firestore.rules`).
+- Member 5's Admin workflow can reassign disputed reports to new technicians, which resets/progresses the report status appropriately as verified in `community_verification_test.dart`.
+
+## 2026-11-17 23:35:51 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Automated Verification Tests & Final QA
+
+### Completed
+- Added automated test suite `test/community_verification_test.dart` with 12 comprehensive unit and widget tests:
+  - Haversine great-circle distance calculation for proximity checking.
+  - Verification eligibility validation for nearby authenticated citizens.
+  - Ineligible user role rejection (admin, technician acting as community verifier).
+  - Conflict-of-interest prevention: original reporter cannot verify their own report.
+  - Conflict-of-interest prevention: assigned technician cannot verify their own repair work.
+  - Non-completed report verification rejection (pending/ongoing reports cannot be audited).
+  - Duplicate voting prevention: citizen cannot cast multiple verification or dispute votes on the same report.
+  - Verification radius rejection: citizens outside the 5.0 km radius are blocked.
+  - Verification threshold progression: 3rd confirmation automatically logs the "Community Verified" milestone event.
+  - Dispute submission: automatically transitions report status from `completed` to `disputed`, increments dispute counter, creates an audit timeline entry, and dispatches a dispute alert notification.
+  - Widget test: `CitizenVerificationScreen` rendering of report details, audit progress bar, Before/After evidence, and verification actions.
+- Executed full QA suite across repository: 90/90 tests passing, 0 static analysis issues, 0 formatting issues.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — all files cleanly formatted. |
+| `flutter analyze` | Pass — 0 errors, 0 warnings. |
+| `flutter test test/community_verification_test.dart` | Pass — 12/12 tests green. |
+| `flutter test` | Pass — 90/90 tests green across the entire repository. |
+
+### Handoff Notes & Environmental Blockers
+- Member 7 owns community verification and dispute workflows.
+- Verification threshold is set to 3 independent community votes.
+- Proximity verification enforces a 5.0 km radius with automatic GPS lookup and graceful fallback for desktop/emulator development.
+- Live Firebase Cloud Functions for backend threshold triggers and Firestore security rules remain defined in `firestore.rules` for production deployment.
+
+## 2026-11-17 23:06:04 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Citizen Verification UI & Dispute Flow
+
+### Completed
+- Built `CitizenVerificationScreen` (`lib/features/verification/presentation/citizen_verification_screen.dart`):
+  - Displays report header, fault type, priority, status badge, and assigned technician.
+  - Implemented proximity banner computing real-time GPS distance with Haversine formula and graceful fallback for desktop/emulator environments.
+  - Added visual 5.0 km radius eligibility indicator with distance readout and status warnings.
+  - Integrated `VerificationEvidenceCard` with interactive Before/After photo tabs and technician notes.
+  - Added community audit progress bar displaying votes towards the 3-vote milestone threshold, with "Community Verified ✓" celebration badge upon completion.
+  - Rendered existing resident verification notes and dispute records.
+  - Added confirmation resolution sheet and structured dispute dialog with reason categories, mandatory explanations, and optional camera/gallery photo evidence attachment.
+- Added `/verify-repair` route to `AppRouter` with arguments support.
+- Connected "Verify Repair" notifications in `SharedNotificationsView` to route directly to `CitizenVerificationScreen`.
+- Added "Community Verification & Audit" CTA button in `SharedReportsView` report detail sheet for completed/disputed reports.
+- Added "Repairs Awaiting Verification" list to `CitizenHomeView` for easy community discovery.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core lib/features` | Pass — 62 files checked. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+
+### Remaining
+- Automated verification workflow tests (`test/community_verification_test.dart`), full QA, and final handoff.
+
+## 2026-11-17 23:01:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Core Verification Engine & Contracts
+
+### Completed
+- Completed repository preflight inspection of README, docs/AquaTrace UI.pdf, ui_pdf_extracted_text.txt, 12_Proposal.pdf, and firestore.rules.
+- Implemented `VerificationVoteModel` (`/reports/{reportId}/verifications/{voterUid}`) for community repair audit votes.
+- Implemented `DisputeRecordModel` (`/reports/{reportId}/disputes/{voterUid}`) for citizen disputes.
+- Created `CommunityVerificationGateway` and `FirebaseCommunityVerificationGateway` supporting Firestore transactional writes, audit timeline events, and Storage upload for dispute evidence.
+- Created `CommunityVerificationService` with Haversine distance calculation, proximity radius enforcement (5.0 km default), 3-vote milestone threshold, and eligibility guards (citizen role requirement, reporter conflict-of-interest prevention, assigned technician conflict-of-interest prevention, duplicate vote guard).
+- Integrated verification and dispute stores into `DataRepository` with mock seed data, query methods, verification submission, and dispute submission with automatic status reopening to `FaultStatus.disputed`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core lib/features/verification` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
+
+### Remaining
+- Citizen verification UI screens, before/after photo comparison, and dispute dialogs.
+- Automated verification unit/widget tests and QA.
+
+## 2026-11-16 15:19:21 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 corrective audit
+
+### Fixed
+- Preserved the selected job during technician-to-map navigation handoff.
+- Removed the cached-report fallback from job details so deleted jobs no longer remain visible after refresh.
+- Added live activity timeline entries to the technician job history.
+- Rejected unsupported photo extensions instead of silently treating them as JPEG.
+- Synchronized repair-note text with refreshed report data without overwriting active technician edits.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Merge-conflict marker scan | Pass — none found in Dart or Markdown. |
+| Dart hot restart | Not run — no Flutter app connected to the Dart Tooling Daemon. |
+
+### Remaining environment limitations
+- Live Firebase Firestore/Storage permissions, weak-network behavior, physical camera/storage permissions, and device image-picker behavior require an authenticated Firebase account, emulator, or physical device.
+
+## 2026-11-16 15:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 4
+
+### Completed
+- Completed final technician regression and handoff QA for login role routing, assigned queue filtering, job details, navigation/map handoff, status workflow, notes, evidence gating, assignment refresh, stale assignment protection, job history, and admin-action restrictions.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+- Reviewed the final Git diff and verified only the Section 4 update-log change remains locally.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart Tooling Daemon app discovery | No connected Flutter app found. |
+| Dart hot restart / interactive launch | Not run — requires a connected debug Flutter app. |
+
+### Handoff notes and limitations
+- Member 1 owns authentication, role provisioning, routing, shared models, and Firebase initialization.
+- Member 4 owns the shared map surface and navigation handoff.
+- Member 5 owns admin assignment and dispatch actions.
+- Member 8 owns notification delivery and activity presentation.
+- Live Firestore/Storage permissions, weak-network retries, camera/storage permission denial, and physical-device picker behavior require an authenticated Firebase technician account, emulator, or device.
+- Prompt 6C Section 4 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-16 11:17:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 3
+
+### Completed
+- Added a stale-assignment guard to the technician job detail screen.
+- When a job is reassigned, removed, or no longer belongs to the signed-in technician, cached job details and technician actions are hidden.
+- Job detail rendering now reads the latest report from `DataRepository`, so status, notes, evidence, and assignment changes refresh from shared state.
+- Revalidated technician login-role assumptions, queue reassignment behavior, workflow refresh, ownership checks, and admin-action restrictions.
+
+### Files changed
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_job_detail_screen.dart lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+| Technician widget harness test | Not retained — the isolated detail-screen harness hung before completing despite bounded pumps; production guard was validated by analyzer and deterministic repository workflow tests. |
+
+### Outstanding
+- Section 4 will run the final full test suite, formatter/analyzer, web build, launch/runtime availability check, and final handoff QA.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-16 08:48:58 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 2
+
+### Completed
+- Added explicit role validation to admin-only technician assignment and report-severity operations.
+- Updated the admin report UI to pass the authenticated administrator role to repository mutations.
+- Added regression coverage proving technician-role calls cannot assign jobs or change report severity.
+- Re-ran technician queue, transition, ownership, assignment, and failure-path tests after the authorization change.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/features/admin/presentation/admin_reports_view.dart`
+- `test/admin_workflow_test.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 3–4 will cover full UI workflow/refresh checks, upload and permission failure paths, final launch/build QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 19:11:52 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 1
+
+### Completed
+- Reviewed the technician implementation, role/authentication flow, shared contracts, handoff notes, Git status, and technician UI reference screens in `docs/AquaTrace UI.pdf` and `docs/ui_pdf_extracted_text.txt`.
+- Prevented blank technician identities from exposing malformed or unassigned jobs through the local technician queue.
+- Rejected technician status, notes, and evidence operations without a valid technician identity.
+- Rejected admin assignments missing a technician UID or technician name.
+- Added regression tests for missing assignment data and identity-boundary enforcement.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 2–4 will cover full role/login and UI workflow regression, failure-path verification, final build/launch QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 18:59:57 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 3
+
+### Completed
+- Performed final Prompt 6B QA for technician assignment filtering, workflow transitions, ownership checks, evidence gating, error handling, and shared report synchronization.
+- Confirmed technician Firestore reads are scoped to `assignedTechnicianUid == auth.uid`.
+- Confirmed technician transitions remain limited to `assigned -> ongoing -> completed`, with completion requiring after-repair evidence.
+- Confirmed repair evidence uses technician-scoped Firebase Storage rules and invalid/offline operations do not mutate local report state.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Outstanding
+- Live Firestore/Storage permission behavior, network retry behavior, and physical image-picker permissions still require an authenticated Firebase technician account or emulator/device.
+- Section 3 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-15 14:15:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 2
+
+### Completed
+- Added technician dashboard feedback for report synchronization errors and retry, plus a loading indicator while assigned jobs are being fetched.
+- Added integration regression coverage for assignment changes, reassignment queue visibility, offline/demo photo upload rejection, invalid repair notes, invalid image types, ownership, and transition enforcement.
+- Verified failed preconditions leave the report unchanged rather than presenting a success-shaped state.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/technician/presentation/technician_home_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 8/8. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 3 will perform final Prompt 6B launch/build review and document live Firebase/offline environment blockers.
+- Real network failure/retry and Storage upload failure require an authenticated Firebase technician account or emulator.
+
 ## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
 
 ### Completed

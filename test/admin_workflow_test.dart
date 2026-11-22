@@ -64,6 +64,7 @@ void main() {
         technicianUid: 'tech-001',
         technicianName: 'Verified Technician',
         adminName: 'Admin',
+        actorRole: 'Admin',
       );
 
       final report = repository.getReportById('AT-2026-00125');
@@ -73,4 +74,29 @@ void main() {
       expect(report?.assignedAt, isNotNull);
     },
   );
+
+  test('technician role cannot perform admin assignment', () {
+    expect(
+      () => repository.assignTechnician(
+        reportId: 'AT-2026-00125',
+        technicianUid: 'tech-001',
+        technicianName: 'Verified Technician',
+        adminName: 'Technician',
+        actorRole: 'Technician',
+      ),
+      throwsA(isA<PermissionException>()),
+    );
+  });
+
+  test('technician role cannot change report severity', () {
+    expect(
+      () => repository.updateReportSeverity(
+        reportId: 'AT-2026-00125',
+        severity: FaultSeverity.critical,
+        adminName: 'Technician',
+        actorRole: 'Technician',
+      ),
+      throwsA(isA<PermissionException>()),
+    );
+  });
 }

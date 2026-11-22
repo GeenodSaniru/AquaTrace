@@ -1,0 +1,17 @@
+{
+  "name": "aquatrace-functions",
+  "private": true,
+  "description": "AquaTrace notification triggers (reference implementation, not deployed)",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "deploy": "firebase deploy --only functions --project aquatrace-92e2e"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}
