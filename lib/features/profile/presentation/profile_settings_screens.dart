@@ -360,7 +360,7 @@ class _NotificationSettingsScreenState
           ),
           const SizedBox(height: 12),
           Text(
-            'Choices are saved on this device. Push notifications and weekly email are not connected in this build.',
+            'Report Updates controls push notifications on this device. Repair Verification is shared with your account while you are signed in so alerts follow it. Nearby Faults alerts and the weekly email are not connected in this build.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 24),

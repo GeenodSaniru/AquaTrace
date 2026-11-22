@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_roles.dart';
 import '../../../core/constants/fault_constants.dart';
 import '../../../core/models/report_model.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_priority_badge.dart';
@@ -213,6 +215,7 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
         technicianUid: selected,
         technicianName: technicians[selected]!,
         adminName: admin.displayName,
+        actorRole: admin.role.name,
       );
     });
   }
@@ -224,6 +227,7 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
         reportId: widget.report.reportId,
         severity: severity,
         adminName: admin.displayName,
+        actorRole: admin.role.name,
       );
     });
   }
@@ -288,6 +292,11 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
             Text('Reported by ${report.reporterName}'),
             if (report.beforeImageUrl != null) ...[
               const SizedBox(height: 16),
+              const Text(
+                'Initial Fault Evidence',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
@@ -299,6 +308,104 @@ class _ReportReviewSheetState extends State<_ReportReviewSheet> {
                     child: Center(child: Text('Evidence unavailable')),
                   ),
                 ),
+              ),
+            ],
+            if (report.afterImageUrl != null) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'Technician After-Repair Evidence',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  report.afterImageUrl!,
+                  height: 180,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox(
+                    height: 80,
+                    child: Center(
+                      child: Text('After-repair photo unavailable'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (report.status == FaultStatus.disputed ||
+                report.disputeCount > 0) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.statusDisputed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.statusDisputed.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: AppColors.statusDisputed,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Community Disputes (${report.disputeCount})',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.statusDisputed,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...context
+                        .watch<DataRepository>()
+                        .getDisputesForReport(report.reportId)
+                        .map(
+                          (d) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${d.voterName} · ${DateFormat.yMMMd().add_jm().format(d.createdAt)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  d.reason,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.verified_outlined, size: 16),
+                label: const Text('View Community Verification Audit'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(
+                    context,
+                    AppRouter.verifyRepair,
+                    arguments: report.reportId,
+                  );
+                },
               ),
             ],
             const SizedBox(height: 18),

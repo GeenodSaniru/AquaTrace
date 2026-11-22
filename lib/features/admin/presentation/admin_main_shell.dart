@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_roles.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../map/presentation/shared_map_view.dart';
-import '../../notifications/presentation/shared_notifications_view.dart';
+import '../../notifications/presentation/activity_history_screen.dart';
 import '../../profile/presentation/shared_profile_view.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_reports_view.dart';
@@ -34,6 +37,17 @@ class _AdminMainShellState extends State<AdminMainShell> {
     });
   }
 
+  /// The dashboard calls `onNavigateTab(3)` for its notification bell. Tab 3
+  /// is now the report Activity History (per the design), so the bell opens
+  /// the notification list instead of switching tabs.
+  void _onDashboardNavigate(int index) {
+    if (index == 3) {
+      unawaited(Navigator.of(context).pushNamed(AppRouter.notifications));
+    } else {
+      _onTabSelected(index);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -43,10 +57,10 @@ class _AdminMainShellState extends State<AdminMainShell> {
       );
     }
     final List<Widget> tabs = [
-      AdminDashboardView(onNavigateTab: _onTabSelected),
+      AdminDashboardView(onNavigateTab: _onDashboardNavigate),
       const AdminReportsView(),
       const SharedMapView(),
-      const SharedNotificationsView(),
+      const ActivityHubView(),
       const SharedProfileView(),
     ];
 

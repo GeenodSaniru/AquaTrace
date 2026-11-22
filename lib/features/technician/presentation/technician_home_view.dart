@@ -7,6 +7,7 @@ import '../../../core/models/report_model.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_error_widget.dart';
 import '../../../core/widgets/app_header_bar.dart';
 import '../../../core/widgets/app_metric_card.dart';
 import '../../../core/widgets/app_priority_badge.dart';
@@ -58,6 +59,19 @@ class TechnicianHomeView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (dataRepo.reportsErrorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: AppErrorWidget(
+                  message: dataRepo.reportsErrorMessage!,
+                  onRetry: dataRepo.retryReportSync,
+                ),
+              ),
+            if (dataRepo.reportsLoading && assignedJobs.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: LinearProgressIndicator(),
+              ),
             // Status Metrics (New, Ongoing, Completed)
             Row(
               children: [
@@ -253,7 +267,7 @@ class TechnicianHomeView extends StatelessWidget {
           report: job,
           onNavigate: () {
             Navigator.of(context).pop();
-            onNavigateTab?.call(2);
+            onNavigateTab?.call(2, job);
           },
         ),
       ),

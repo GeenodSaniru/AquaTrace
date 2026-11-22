@@ -7,6 +7,11 @@ class NavigationService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
+  /// Lets code without a [BuildContext] (e.g. push-message handlers) show
+  /// in-app banners.
+  static final GlobalKey<ScaffoldMessengerState> messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   static BuildContext? get context => navigatorKey.currentContext;
 
   static Future<T?>? navigateTo<T>(String routeName, {Object? arguments}) {

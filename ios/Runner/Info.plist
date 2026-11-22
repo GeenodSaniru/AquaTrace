@@ -34,6 +34,13 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Lets FCM wake the app for remote notifications. The Push Notifications
+	     capability / aps-environment entitlement still has to be enabled for
+	     the Runner target with an Apple Developer team (see functions/README.md). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
