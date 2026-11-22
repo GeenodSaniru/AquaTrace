@@ -116,20 +116,23 @@ app's fields ever drift from what `firestore.rules` accepts.
 ## Preferences
 
 The app mirrors the Settings switches to
-`/users/{uid}/settings/notifications` (client sync: 8B part 3):
+`/users/{uid}/settings/notifications` (only while signed in with a real
+Firebase session; unchanged values are not re-written; a failed write is
+retried a bounded number of times, the latest choice wins):
 
 ```json
-{ "pushEnabled": true, "reportUpdates": true, "repairVerification": true, "nearbyFaults": true, "updatedAt": "<server timestamp>" }
+{ "pushEnabled": true, "repairVerification": true, "nearbyFaults": true, "updatedAt": "<server timestamp>" }
 ```
 
-The backend honours them (missing document or field = enabled):
+| Settings screen switch | Field | Backend effect (missing document or field = enabled) |
+|---|---|---|
+| **Report Updates** | `pushEnabled` | `false`: the in-app record is still created, no push is sent (the app also removes this device's token) |
+| **Repair Verification** | `repairVerification` | `false`: none of the *Verify Repair* requests or community milestones (no record, no push) |
+| **Nearby Faults** | `nearbyFaults` | stored; **no producer yet** (there is no "new fault near you" notification) |
 
-| Setting | Effect |
-|---|---|
-| `reportUpdates: false` | no in-app record and no push for approval / assignment / dispute / update notifications |
-| `repairVerification: false` | none of the verification requests or community milestones |
-| `pushEnabled: false` | in-app record is still created; no push |
-| `nearbyFaults` | stored; **no producer yet** (there is no "new fault near you" notification) |
+The backend also understands `reportUpdates: false` (drops approval /
+assignment / dispute / update notifications entirely). The current Settings
+screen has no separate switch for it, so the app does not write it.
 
 ## Push (FCM) contract
 

@@ -20,6 +20,7 @@ import 'features/auth/providers/auth_provider.dart';
 import 'features/citizen/presentation/citizen_main_shell.dart';
 import 'features/notifications/notification_navigation.dart';
 import 'features/notifications/services/backend_session.dart';
+import 'features/notifications/services/notification_preferences_sync.dart';
 import 'features/notifications/services/push_messaging_service.dart';
 import 'features/technician/presentation/technician_main_shell.dart';
 
@@ -66,11 +67,23 @@ void main() async {
   );
   unawaited(pushService.initialize());
 
-  // Follow the signed-in user: notification inbox + push token.
+  // Mirror the Settings switches to the account so the backend honours them.
+  final preferencesSync = NotificationPreferencesSync(
+    store: FirebaseNotificationPreferencesStore(),
+    read: () => NotificationPreferences(
+      pushEnabled: prefsService.pushNotificationsEnabled,
+      repairVerification: prefsService.repairVerificationEnabled,
+      nearbyFaults: prefsService.nearbyFaultsEnabled,
+    ),
+    canUseBackend: hasBackendSession,
+  );
+
+  // Follow the signed-in user: notification inbox, push token, preferences.
   void syncSignedInUser() {
     final uid = authProvider.currentUser?.uid;
     dataRepository.bindNotificationUser(uid);
     unawaited(pushService.bindUser(uid));
+    unawaited(preferencesSync.bindUser(uid));
   }
 
   authProvider
@@ -82,6 +95,9 @@ void main() async {
   // Turning "Push Notifications" on/off in Settings registers/unregisters.
   var pushPreference = prefsService.pushNotificationsEnabled;
   prefsService.addListener(() {
+    // Mirrors only when a notification choice actually changed (unchanged
+    // values are not re-written).
+    unawaited(preferencesSync.sync());
     final enabled = prefsService.pushNotificationsEnabled;
     if (enabled == pushPreference) return;
     pushPreference = enabled;

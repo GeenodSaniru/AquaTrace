@@ -1,6 +1,38 @@
 # AquaTrace — Update Log
 
-## 2026-11-22 09:10:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 2/4: server-side workflow triggers, aggregation, dedupe and push privacy
+## 2026-11-22 09:14:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 3/4: notification preferences, token lifecycle and client hardening
+
+Branch `feature/notifications-history`. Builds on Parts 1–2.
+
+### Completed
+- **User notification preferences, end to end.** `NotificationPreferencesSync` mirrors the Settings switches to `/users/{uid}/settings/notifications` (`pushEnabled` ← *Report Updates*, `repairVerification`, `nearbyFaults`) so the backend (Part 2 `applyPreferences`) can honour them. Written only for the signed-in user with a real Firebase session (never for demo identities / signed out), unchanged values are not re-written, a failed write is retried (bounded) and the latest choice wins. New owner-only rules for that one document (booleans + server `updatedAt`).
+- **Token lifecycle verified and tested** (from 8A, re-audited here): register only after a user-initiated permission grant, replace on refresh (old token removed), remove on sign-out / push switched off / account switch (device token invalidated so the previous account cannot reach the device), never register for demo identities, refresh events ignored while signed out or suspended.
+- **Duplicate delivery on the client:** the same push reported twice within 5 s (e.g. cold-start `getInitialMessage` + `onMessageOpenedApp`, or a platform retry) shows one banner / navigates once; legitimately re-opening a notification later still works; messages without any id are never dropped. Inbox documents are keyed by id, so a re-delivered notification never appears twice.
+- **Navigation requires authentication / authorization** (re-verified, tests): signed-out → "Sign in required"; reports resolve only from the user's own data (technician sees only assigned jobs, others the history); a verification link opens the verify screen only for an eligible citizen; unknown / deleted / malformed ids → "unavailable".
+- **Settings copy made truthful:** the Notification Settings footer said push/email "are not connected"; it now says what is true (Report Updates controls push on this device, Repair Verification is shared with the account, Nearby Faults alerts and weekly email are not connected). *Member 2 — one string in `profile_settings_screens.dart`, please review.*
+
+### Bugs found and fixed
+- Account switched while a preferences write was in flight → the new user's preferences were never written (found by a test). The in-flight handling now always re-syncs for the current user.
+
+### Files changed
+New: `lib/features/notifications/services/notification_preferences_sync.dart`, `test/notification_preferences_test.dart`. Modified: `push_messaging_service.dart` (duplicate suppression, injectable clock), `lib/main.dart` (wiring), `firestore.rules` (settings document), `functions/README.md`, `functions/test/contract.test.js` (preferences ↔ rules ↔ backend contract), `profile_settings_screens.dart` (copy), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **216/216** (+16 new: preferences sync, push de-duplication) |
+| `npm test` (in `functions/`) | Pass — **42/42** |
+
+### Not done / blockers
+- Preference mirroring and the server honouring them are **not verified against a live Firebase project**; the settings rules are not deployed or emulator-tested.
+- The Settings screen has one "Report Updates" switch that is the push switch; there is no separate "hide report-update records" control, so in-app records for report updates are always kept.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
+## 2026-11-22 09:09:50 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 2/4: server-side workflow triggers, aggregation, dedupe and push privacy
 
 Branch `feature/notifications-history`. Builds on Part 1 (merge of Member 6/7 work).
 
@@ -10,7 +42,7 @@ Branch `feature/notifications-history`. Builds on Part 1 (merge of Member 6/7 wo
 - **Duplicate prevention:** deterministic ids from the trigger event id; **logical ids** for milestone / dispute notifications (stable across retries and across triggers); deterministic audit-event ids with `create()`; the report-update trigger emits nothing for `→ disputed` (single source) and counter bumps never re-notify.
 - **Correct recipients / no self-verification:** the reporter now gets an informational *Repair Completed* (Member 7's rules forbid verifying your own report); the PDF's *Verify Repair* request goes to citizens in the report's service area (capped at 50, de-duplicated, excluding reporter / technician / admins).
 - **Invalid references handled:** deleted report or user, blank uids, vote on a report that is no longer completed (marked `rejected`) are skipped without errors.
-- **Preferences honoured server-side** (`applyPreferences`): category off drops the record and push; `pushEnabled: false` keeps the in-app record only. (Client sync of the Settings switches is Part 3.)
+- **Preferences honoured server-side** (`applyPreferences`): category off drops the record and push; `pushEnabled: false` keeps the in-app record only. 
 - **Push payload privacy:** OS-visible text is now generic (`Report <id>. Open AquaTrace for details.`) with no names, addresses, reasons or uids; the data block is exactly `{notificationId, reportId, type}`.
 - **Audit trail privacy:** server-written dispute / verification events contain no voter name or dispute reason (activity is readable by all citizens).
 

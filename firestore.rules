@@ -7,6 +7,7 @@ rules_version = '2';
  *   /users/{uid}
  *   /users/{uid}/notifications/{notificationId}   // server-created, owner marks read
  *   /users/{uid}/fcmTokens/{token}                // owner-managed push tokens
+ *   /users/{uid}/settings/notifications           // owner-managed notification choices
  *   /reports/{reportId}
  *   /reports/{reportId}/activity/{activityId}
  *   /reports/{reportId}/verifications/{voterUid}   // Member 7 (counted by functions/)
@@ -222,6 +223,34 @@ service cloud.firestore {
           && request.resource.data.platform in ['android', 'ios', 'macos']
           && request.resource.data.updatedAt == request.time
           && onlyChanging(['platform', 'updatedAt']);
+
+        allow delete: if isSelf(uid);
+      }
+
+      // ------------------------------------------------------------------------
+      // /users/{uid}/settings/notifications  - notification choices (Member 8)
+      //
+      // The owner mirrors the Settings switches here so the backend can honour
+      // them (read with the Admin SDK). Only this one document, only booleans.
+      // ------------------------------------------------------------------------
+      match /settings/{settingId} {
+        allow read: if isSelf(uid);
+
+        allow create, update: if isSelf(uid)
+          && settingId == 'notifications'
+          && request.resource.data.keys().hasOnly([
+            'pushEnabled',
+            'reportUpdates',
+            'repairVerification',
+            'nearbyFaults',
+            'updatedAt'
+          ])
+          && request.resource.data.pushEnabled is bool
+          && request.resource.data.repairVerification is bool
+          && request.resource.data.nearbyFaults is bool
+          && (!('reportUpdates' in request.resource.data)
+              || request.resource.data.reportUpdates is bool)
+          && request.resource.data.updatedAt == request.time;
 
         allow delete: if isSelf(uid);
       }

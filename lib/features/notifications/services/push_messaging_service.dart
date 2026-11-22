@@ -311,8 +311,14 @@ class PushMessagingService extends ChangeNotifier {
     bool Function()? isUserEnabled,
     this._onOpenReport,
     this._onForegroundMessage,
+    DateTime Function()? clock,
   }) : _canUseBackend = canUseBackend ?? ((_) => true),
-       _isUserEnabled = isUserEnabled ?? (() => true);
+       _isUserEnabled = isUserEnabled ?? (() => true),
+       _clock = clock ?? DateTime.now;
+
+  /// The same message reported again within this window is treated as a
+  /// duplicate delivery; later taps (a user re-opening a notification) are not.
+  static const Duration duplicateWindow = Duration(seconds: 5);
 
   final PushMessagingClient _client;
   final PushTokenStore _tokenStore;
@@ -325,6 +331,7 @@ class PushMessagingService extends ChangeNotifier {
   )?
   _onOpenReport;
   final void Function(PushMessage message)? _onForegroundMessage;
+  final DateTime Function() _clock;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
   PushPermissionStatus _status = PushPermissionStatus.unknown;
@@ -334,6 +341,8 @@ class PushMessagingService extends ChangeNotifier {
   bool _initialized = false;
   bool _suspended = false;
   bool _disposed = false;
+  final Map<String, DateTime> _seenForeground = {};
+  final Map<String, DateTime> _seenOpened = {};
   String? _pendingReportId;
   String? _pendingNotificationId;
   NotificationType? _pendingType;
@@ -551,14 +560,36 @@ class PushMessagingService extends ChangeNotifier {
     }
   }
 
+  /// Identity of a message for duplicate suppression: the FCM message id, or
+  /// the notification document id the backend put in the payload.
+  static String? _messageKey(PushMessage message) =>
+      message.messageId ?? message.notificationId;
+
+  /// True if [key] was already seen within [duplicateWindow] (and records
+  /// it otherwise). Old entries are dropped, so the map stays small.
+  bool _alreadySeen(Map<String, DateTime> seen, String? key) {
+    if (key == null) return false;
+    final now = _clock();
+    seen.removeWhere((_, at) => now.difference(at) > duplicateWindow);
+    if (seen.containsKey(key)) return true;
+    seen[key] = now;
+    return false;
+  }
+
   void _handleForeground(PushMessage message) {
     if (_uid == null) return;
+    // The platform can deliver the same message twice (e.g. a retry); show
+    // one banner.
+    if (_alreadySeen(_seenForeground, _messageKey(message))) return;
     _onForegroundMessage?.call(message);
   }
 
   void _handleOpened(PushMessage message) {
     final reportId = message.reportId;
     if (reportId == null) return;
+    // `getInitialMessage` and `onMessageOpenedApp` can both report the same
+    // tap on a cold start; navigate once.
+    if (_alreadySeen(_seenOpened, _messageKey(message))) return;
     if (_uid == null) {
       // Not signed in: remember the link and open it after sign-in. The
       // destination screen re-checks authorization against the user's own data.

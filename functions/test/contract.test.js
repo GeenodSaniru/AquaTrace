@@ -136,3 +136,22 @@ test('the server verification threshold default matches the app default', () => 
   assert.ok(match, 'threshold constant not found in the app');
   assert.equal(Number(match[1]), events.DEFAULT_VERIFICATION_THRESHOLD);
 });
+
+test('notification preferences written by the app are accepted by the rules', () => {
+  const source = read('lib/features/notifications/services/notification_preferences_sync.dart');
+  const preferences = mapKeysAfter(source, 'Map<String, Object> toMap()');
+  const stored = [...preferences, ...mapKeysAfter(source, '.set(')]; // + updatedAt
+  const allowed = rulesAllowedKeys(rules, 'match /settings/{settingId}');
+  assert.ok(preferences.length === 3, 'expected three preference fields');
+  for (const key of new Set(stored)) assert.ok(allowed.includes(key), `rules reject preference field "${key}"`);
+});
+
+test('every preference the app writes is understood by the backend', () => {
+  const source = read('lib/features/notifications/services/notification_preferences_sync.dart');
+  const written = mapKeysAfter(source, 'Map<String, Object> toMap()');
+  const index = read('functions/notification_events.js');
+  // pushEnabled is read directly; the verification switch maps to a category.
+  assert.ok(index.includes('pushEnabled'), 'backend ignores pushEnabled');
+  assert.ok(index.includes("'repairVerification'"), 'backend ignores repairVerification');
+  assert.ok(written.includes('pushEnabled') && written.includes('repairVerification'));
+});
