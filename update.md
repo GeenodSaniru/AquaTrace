@@ -1,5 +1,43 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 19:02:32 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 1/4: lifecycle history audit (order, titles, recipients)
+
+Branch `feature/notifications-history` (clean and in sync with `origin` at start; no new commits on `origin/main` / `origin/test` since 8B). Prompt 8C is delivered in four parts, each committed and pushed when finished.
+
+### Preflight
+- Re-read `README.md`, `docs/MEMBER1_HANDOFF.md`, `functions/README.md`, `AquaTrace_Member_Prompts.md` (8C), the full `update.md`, and the Git state.
+- UI reference: `docs/AquaTrace UI.pdf` (contact sheet + `docs/ui_pdf_extracted_text.txt`): notification list ("New 2" / "Earlier", "Mark all read"), notification examples (Technician Assigned, Verify Repair, Report Approved, Dispute Opened) and the admin **Activity History** timeline (Report Submitted → Report Verified → Technician Assigned → Repair Started → Repair Completed → Community Verified). Proposal (`docs/12_Proposal.pdf`, decoded): "notifications when … a new technician assignment, report status update, or dispute" and "a complete status and activity history … from initial submission through final resolution".
+
+### Method
+Drove the **real** `DataRepository` through the whole lifecycle (submit → admin verifies + assigns → repair started → completed → three community confirmations → dispute) and compared the resulting timeline and every recipient's inbox against the design and the backend rules (`test/lifecycle_history_test.dart`, 10 tests).
+
+### Bugs found and fixed (all reproduced by the new test first)
+1. **No "Report Verified" step.** The admin approve-and-assign action wrote only *Technician Assigned*, so the "admin verified" event the design shows was missing from every report's history. Approving a *pending* report now records *Report Verified* then *Technician Assigned* (re-assigning a disputed report is not a fresh verification).
+2. **Wrong titles for technician steps:** *Job Ongoing* / *Job Completed* → **Repair Started** / **Repair Completed** (as in the design), with the design's descriptions.
+3. **Audit-event ordering ties:** ids were `act-<µs>-<n>` with an unpadded counter, so on a coarse clock (web has millisecond resolution) events created in one tick sorted wrongly once the counter crossed 9 → 10 (`…-10` < `…-9`). Ids are now fixed width (`act-<17 digits>-<6 digits>`); technician events (which used a bare microsecond id and could collide) use the same scheme.
+4. **Notification ordering ties (demo backend):** same unpadded-counter problem made newer notifications sort *below* older ones (e.g. the technician saw *Repair Verified by Community* above the later *Repair Disputed*). Demo ids are fixed width.
+5. **Demo mode showed no notification for assignment / repair started / completed / new report** (only Member 7's events did), so "events reach the correct recipients" could not be checked without a backend. The demo backend now mirrors `functions/` for those events using the same titles and texts (new report → admin; approved + assigned → reporter, job → technician; started → reporter; completed → reporter *informed*, admin, and a same-area neighbour asked to *Verify Repair*). Demo-only; real clients still never create notifications.
+
+### Verified (test results)
+- History order: Report Submitted → Report Verified → Technician Assigned → Repair Started → Repair Completed → 3 × Community Verification Confirmed with **Community Verified** after the third → Dispute Raised; timestamps non-decreasing, unique ids, actors/roles correct, no unknown times.
+- Recipients (newest first): reporter ← Dispute Opened, Repair Verified, Repair Completed, Repair Started, Technician Assigned, Report Approved (never *Verify Repair*); technician ← Repair Disputed, Repair Verified by Community, New Job Assigned; admin ← Dispute Raised, Repair Verified by Community, Repair Completed, New Report Submitted; neighbour ← Verify Repair; disputing resident ← Dispute Submitted only; bystanders ← nothing. All reference the right report and are unread.
+
+### Files changed
+`lib/core/services/data_repository.dart` (history steps, titles, padded ids, demo notifications), `test/lifecycle_history_test.dart` (new), `test/notifications_widget_test.dart` (one assertion updated for the extra *Report Verified* event), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **226/226** (216 + 10 new) |
+
+### Next (Parts 2–4)
+Backend delivery path tested with fakes (ordering, replay, preferences, missing users), stale / offline / missing-timestamp / accessibility QA, FCM permission-revoked edge, then final QA, browser launch and handoff.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
 ## 2026-11-22 09:25:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 4/4: final QA, event-flow verification, docs and handoff
 
 Branch `feature/notifications-history`. Closes Prompt 8B (Parts 1–3 are the entries below).

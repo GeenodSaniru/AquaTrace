@@ -232,6 +232,7 @@ class DataRepository with ChangeNotifier {
         actorRole: 'Citizen',
         status: FaultStatus.pending,
       );
+      _demoNotifyNewReport(savedReport);
       notifyListeners();
     } finally {
       _submissionsInFlight.remove(report.reportId);
@@ -425,12 +426,10 @@ class DataRepository with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      id: _newActivityId(),
       reportId: reportId,
-      title: 'Job ${newStatus.displayName}',
-      description:
-          note ??
-          'Job status changed to ${newStatus.displayName} by $actorName.',
+      title: _repairEventTitle(newStatus),
+      description: note ?? _repairEventDescription(newStatus, actorName),
       actorName: actorName,
       actorRole: 'Technician',
       status: newStatus,
@@ -445,8 +444,25 @@ class DataRepository with ChangeNotifier {
     }
     _reports[index] = updated;
     _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
+    _demoNotifyRepairStatus(before: current, after: updated);
     notifyListeners();
   }
+
+  /// Audit-trail title for a technician's status change (matches the design:
+  /// "Repair Started" / "Repair Completed").
+  static String _repairEventTitle(FaultStatus status) => switch (status) {
+    FaultStatus.ongoing => 'Repair Started',
+    FaultStatus.completed => 'Repair Completed',
+    _ => 'Job ${status.displayName}',
+  };
+
+  static String _repairEventDescription(FaultStatus status, String actorName) =>
+      switch (status) {
+        FaultStatus.ongoing => 'Technician started repair work.',
+        FaultStatus.completed =>
+          'Repair marked completed. After-repair photos uploaded.',
+        _ => 'Job status changed to ${status.displayName} by $actorName.',
+      };
 
   Future<void> uploadTechnicianAfterRepairPhoto({
     required String reportId,
@@ -538,7 +554,7 @@ class DataRepository with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      id: _newActivityId(),
       reportId: reportId,
       title: 'Repair Notes Updated',
       description: 'Repair notes updated by $actorName.',
@@ -604,6 +620,19 @@ class DataRepository with ChangeNotifier {
         updatedAt: updatedAt,
       );
 
+      // Approving a pending report is the "admin verified" step of the
+      // lifecycle; re-assigning a disputed one is not a fresh verification.
+      if (report.status == FaultStatus.pending) {
+        _addTimelineEvent(
+          reportId: reportId,
+          title: 'Report Verified',
+          description:
+              'Admin verified and approved the report. Priority set to ${report.severity.displayName}.',
+          actorName: adminName,
+          actorRole: 'Admin',
+          status: FaultStatus.assigned,
+        );
+      }
       _addTimelineEvent(
         reportId: reportId,
         title: 'Technician Assigned',
@@ -612,6 +641,7 @@ class DataRepository with ChangeNotifier {
         actorRole: 'Admin',
         status: FaultStatus.assigned,
       );
+      _demoNotifyAssignment(before: report, after: _reports[index]);
 
       notifyListeners();
     }
@@ -810,7 +840,9 @@ class DataRepository with ChangeNotifier {
     if (backend is! InMemoryNotificationGateway || recipientUid.isEmpty) return;
     backend.deliver(
       NotificationItem(
-        id: 'demo-${DateTime.now().microsecondsSinceEpoch}-${_demoNotificationSequence++}',
+        // Fixed-width parts: notifications created in the same tick are ordered by
+        // id (newest first), so "...-000010" must sort after "...-000009".
+        id: 'demo-${DateTime.now().microsecondsSinceEpoch.toString().padLeft(17, '0')}-${(_demoNotificationSequence++).toString().padLeft(6, '0')}',
         recipientUid: recipientUid,
         title: title,
         body: body,
@@ -821,10 +853,119 @@ class DataRepository with ChangeNotifier {
     );
   }
 
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportCreated`).
+  void _demoNotifyNewReport(ReportModel report) {
+    _demoNotify(
+      recipientUid: MockData.adminUser.uid,
+      title: report.isEmergency
+          ? 'Emergency Report Submitted'
+          : 'New Report Submitted',
+      body:
+          '${report.reportId} ${report.faultType.displayName} at ${report.address} needs review.',
+      reportId: report.reportId,
+      type: NotificationType.update,
+    );
+  }
+
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportUpdated`, assignment).
+  void _demoNotifyAssignment({
+    required ReportModel before,
+    required ReportModel after,
+  }) {
+    final technicianUid = after.assignedTechnicianUid;
+    if (technicianUid == null) return;
+    final technicianName = after.assignedTechnicianName ?? 'a technician';
+    if (before.status == FaultStatus.pending) {
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Report Approved',
+        body:
+            'Your report ${after.reportId} has been verified by admin and is now assigned.',
+        reportId: after.reportId,
+        type: NotificationType.approval,
+      );
+    }
+    _demoNotify(
+      recipientUid: after.reporterUid,
+      title: 'Technician Assigned',
+      body:
+          'Your report ${after.reportId} has been assigned to $technicianName.',
+      reportId: after.reportId,
+      type: NotificationType.assignment,
+    );
+    _demoNotify(
+      recipientUid: technicianUid,
+      title: 'New Job Assigned',
+      body:
+          'Report ${after.reportId} at ${after.address} has been assigned to you.',
+      reportId: after.reportId,
+      type: NotificationType.assignment,
+    );
+  }
+
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportUpdated`, repair status).
+  void _demoNotifyRepairStatus({
+    required ReportModel before,
+    required ReportModel after,
+  }) {
+    final technicianName = after.assignedTechnicianName ?? 'a technician';
+    if (before.status == FaultStatus.assigned &&
+        after.status == FaultStatus.ongoing) {
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Repair Started',
+        body: 'Repair work has started on your report ${after.reportId}.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+    } else if (after.status == FaultStatus.completed) {
+      // The reporter cannot verify their own repair, so they are informed;
+      // citizens in the same service area are asked to verify.
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Repair Completed',
+        body:
+            'Your report ${after.reportId} has been marked completed. Nearby residents may be asked to confirm the repair.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+      _demoNotify(
+        recipientUid: MockData.adminUser.uid,
+        title: 'Repair Completed',
+        body: '${after.reportId} was marked completed by $technicianName.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+      final neighbour = MockData.citizenUser;
+      if (neighbour.assignedArea == after.assignedArea &&
+          neighbour.uid != after.reporterUid &&
+          neighbour.uid != after.assignedTechnicianUid) {
+        _demoNotify(
+          recipientUid: neighbour.uid,
+          title: 'Verify Repair',
+          body:
+              'Repair completed for ${after.reportId}. Please verify whether the issue has been resolved.',
+          reportId: after.reportId,
+          type: NotificationType.verification,
+        );
+      }
+    }
+  }
+
   /// Unique, time-ordered audit id (microsecond clock + a process counter so
   /// events created in the same tick never collide).
-  static String _newActivityId() =>
-      'act-${DateTime.now().microsecondsSinceEpoch}-${_activitySequence++}';
+  ///
+  /// Both parts are zero-padded to a fixed width: events created in the same
+  /// clock tick (web clocks only have millisecond resolution) are ordered by
+  /// id, and "...-000010" must sort after "...-000009".
+  static String _newActivityId() {
+    final tick = DateTime.now().microsecondsSinceEpoch.toString().padLeft(
+      17,
+      '0',
+    );
+    final sequence = (_activitySequence++).toString().padLeft(6, '0');
+    return 'act-$tick-$sequence';
+  }
 
   Future<void> markNotificationAsRead(String id) =>
       _notificationStore.markAsRead(id);

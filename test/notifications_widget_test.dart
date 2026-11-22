@@ -722,7 +722,9 @@ void main() {
 
       expect(find.text('No activity yet'), findsNothing);
       expect(find.text('Technician Assigned'), findsOneWidget);
-      expect(find.text('Dilani Wickramasinghe'), findsOneWidget);
+      // Approving a pending report records both steps, by the same admin.
+      expect(find.text('Report Verified'), findsOneWidget);
+      expect(find.text('Dilani Wickramasinghe'), findsNWidgets(2));
     });
 
     testWidgets('a report that cannot be read still renders gracefully', (
