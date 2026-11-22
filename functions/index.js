@@ -184,12 +184,14 @@ exports.onReportUpdated = onDocumentUpdated('reports/{reportId}', async (event) 
   const after = event.data && event.data.after.data();
   if (!before || !after) return;
 
+  // Counter / notes / priority updates change no status: skip the lookups.
+  const statusChanged = before.status !== after.status;
   const completedNow = before.status !== 'completed' && after.status === 'completed';
   const planned = events.buildReportChangeNotifications({
     reportId: event.params.reportId,
     before,
     after,
-    adminUids: await loadAdminUids(),
+    adminUids: statusChanged ? await loadAdminUids() : [],
     // Only look up nearby citizens when a repair has just been completed.
     nearbyCitizenUids: completedNow ? await loadNearbyCitizenUids(after) : [],
   });

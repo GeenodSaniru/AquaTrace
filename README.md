@@ -262,7 +262,9 @@ Code: `lib/features/notifications/`. Backend reference: `functions/`.
 | Notification list (New / Earlier, unread dot, mark one / mark all read, relative timestamps, tap → related report/job) | Implemented, tested |
 | Activity history timeline per report (`/reports/{id}/activity`, chronological) + admin *Activity* tab | Implemented, tested |
 | FCM client: permission prompt (user-initiated), token register / refresh / remove, foreground banner, tap/cold-start deep links | Implemented, unit tested with fakes; **not verified on a device** |
-| Server-side notification creation + push sending (`functions/`) | Reference code written; decision logic unit tested (`npm test`); **not deployed, not emulator-tested** |
+| Server-side notification creation + push sending (`functions/`) for report, assignment, repair, community verification and dispute events, with duplicate prevention and privacy-safe push text | Reference code written; decision logic + app/rules/backend contracts unit tested (`npm test`, 43 tests); **not deployed, not emulator-tested** |
+| Notification preferences (Settings → `/users/{uid}/settings/notifications`, honoured by the backend) | Implemented, unit tested; **not verified against a live project** |
+| Deep links (`/reports/detail`): authenticated, resolved from the user's own data; "Verify Repair" opens the community verification screen for an eligible citizen | Implemented, widget tested |
 
 Push works end to end only after the backend checklist in [`functions/README.md`](functions/README.md) is done (deploy functions on the Blaze plan, deploy `firestore.rules`, add an APNs key for iOS/macOS). Web push is not configured. The deprecated-but-supported FCM token API is used on purpose (see the comment in `push_messaging_service.dart`).
 

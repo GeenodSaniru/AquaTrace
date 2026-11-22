@@ -155,3 +155,17 @@ test('every preference the app writes is understood by the backend', () => {
   assert.ok(index.includes("'repairVerification'"), 'backend ignores repairVerification');
   assert.ok(written.includes('pushEnabled') && written.includes('repairVerification'));
 });
+
+test('the audit trail is append-only: rules forbid update/delete and the app never attempts either', () => {
+  const block = rules.slice(rules.indexOf('match /activity/{activityId}'));
+  assert.match(block.slice(0, block.indexOf('match /verifications')), /allow update, delete: if false;/);
+
+  const walk = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)],
+    );
+  const offenders = walk(path.join(root, 'lib'))
+    .filter((file) => file.endsWith('.dart'))
+    .filter((file) => /collection\('activity'\)[\s\S]{0,160}\.(update|delete)\(/.test(fs.readFileSync(file, 'utf8')));
+  assert.deepEqual(offenders, [], 'client code must not update or delete audit events');
+});

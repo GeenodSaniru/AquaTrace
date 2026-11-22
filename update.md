@@ -1,5 +1,61 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 09:25:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 4/4: final QA, event-flow verification, docs and handoff
+
+Branch `feature/notifications-history`. Closes Prompt 8B (Parts 1–3 are the entries below).
+
+### What 8B delivered (summary of Parts 1–4)
+| Requirement | Outcome |
+|---|---|
+| Integrate with real events from Members 3, 5, 6, 7 | Member 6/7 work merged from `origin/test`; server triggers for report created, approved/assigned, repair started/completed, community verification and dispute; Member 7's client-side notification inserts replaced (demo-only delivery, real clients never create notifications) |
+| Correct report/job and recipient UID | Recipients derived from the report (`reporterUid`, `assignedTechnicianUid`), admins by role, nearby citizens by service area; reporter is not asked to verify their own repair; typed deep link carries `reportId` + `type` |
+| Prevent duplicates | Deterministic ids from the trigger event id; logical ids for milestone / dispute; `counted` markers; single source for dispute notifications; client de-duplicates repeated push delivery within 5 s |
+| Chronological history, immutable audit events | Client sorts by parsed timestamp (Timestamp + ISO tolerated, unknown time first); rules: activity `update, delete: false`; server appends with deterministic ids via `create()`; contract test asserts no client code updates/deletes activity |
+| Deleted / invalid references | Deleted report or user, blank uids, votes on non-completed repairs skipped server-side; app shows "Report unavailable" / "Sign in required" / invalid-link states |
+| Token refresh / removal, preferences | Tokens register after a user-initiated grant, refresh replaces, removed on sign-out / push off / account switch; Settings switches mirrored to `/users/{uid}/settings/notifications` and honoured by the backend |
+| Push payload privacy, authenticated navigation | OS text is generic (`Report <id>. Open AquaTrace for details.`), data = `{notificationId, reportId, type}` only; links resolve from the signed-in user's own data |
+| Trusted Cloud Functions | `functions/` reference implementation + exact contracts (`functions/README.md`) — **not deployed** |
+
+### Verified in this part
+- Full QA on the final tree (below), including a release web build of `lib/main.dart`.
+- **Browser, demo-mode preview** (temporary entrypoint, deleted, not committed): the demo citizen's **Verify Repair** notification opens Member 7's *Community Verification* screen for AT-2026-00126; a **Report Approved** notification opens the report's *Activity History* (empty-state for a report with no events); list, read state and bell badge behave as in 8A. (The Browser pane's click coordinates scale with the viewport; clicks were re-aimed accordingly.)
+- Event → notification → read state → deep link → history is covered end to end by tests: dispute / milestone delivered to each recipient's own inbox (and nobody else's), milestone once only, tap marks read and opens the right destination by type and role, history stays chronological with live appends.
+
+### Docs
+- `README.md` §6.2a (status table), `functions/README.md` (event table, idempotency, contracts, preferences, privacy, verification plan), `docs/MEMBER1_HANDOFF.md` (admin Activity tab note refreshed).
+- `functions/index.js`: skip the admin-list lookup when a report update changes no status.
+
+### Checks (final tree, 2026-11-22, Windows 11, Flutter 3.47.4 / Dart 3.13.3, Node v24.19.0)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 88 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **216/216** (merged suite incl. Members 1–7, plus all Member 8 tests) |
+| `npm test` (in `functions/`, `node --test`) | Pass — **43/43** (31 logic + 12 contract) |
+| `node --check functions/index.js` and `notification_events.js` | Pass (syntax only) |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated |
+| `git diff --check` | Pass |
+
+### Outstanding backend requirements (nothing below is deployed or verified live)
+1. `cd functions && npm install`; set the region to match Firestore; Blaze plan; `firebase deploy --only functions`.
+2. Deploy `firestore.rules` **together with** the functions (vote / dispute documents are accepted by the new rules and counted only by the functions).
+3. Run the emulator / staging verification plan in `functions/README.md` — the transactions, idempotent replays and preference reads in `index.js` have **not** been executed against Firebase (no Java / Firebase CLI on this machine). `firestore.rules` changes are likewise untested in the emulator.
+4. iOS / macOS: APNs auth key + Push Notifications capability (Apple Developer team). Web push (service worker + VAPID) not configured.
+5. Optional production hardening: geo-index for "nearby" (currently profile area); migrate to the `register()` / `onRegistered` FCM API together with the backend.
+
+### Not verified / honest limitations
+- **No push was ever delivered:** no device/emulator, no deployed backend. Permission, token and tap handling are verified with fakes and widget tests only.
+- Preference mirroring and server-side honouring are verified by unit/contract tests, not against a live project.
+- Dispute / verification flow in the real app additionally needs GPS (Member 7's 5 km rule); in the browser demo the location is denied, so voting itself was verified by tests, not by hand.
+
+### Items for other members
+- **Member 7:** `FirebaseCommunityVerificationGateway` now writes only the vote / dispute document (counters, status flip and audit events are applied by the functions); three assertions in `community_verification_test.dart` now read per-recipient inboxes.
+- **Member 2:** one string in Notification Settings (footer) corrected.
+- **Member 5:** pre-existing debug assertion "ListTile background color…" on the admin dashboard quick actions (unchanged).
+
+### Git
+- Fourth and final 8B commit on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
 ## 2026-11-22 09:14:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 3/4: notification preferences, token lifecycle and client hardening
 
 Branch `feature/notifications-history`. Builds on Parts 1–2.
