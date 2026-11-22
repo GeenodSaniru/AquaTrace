@@ -54,11 +54,12 @@ void main() async {
     tokenStore: FirebasePushTokenStore(),
     canUseBackend: hasBackendSession,
     isUserEnabled: () => prefsService.pushNotificationsEnabled,
-    onOpenReport: (reportId, notificationId) =>
+    onOpenReport: (reportId, notificationId, type) =>
         NotificationNavigation.openReport(
           dataRepository,
           reportId,
           notificationId,
+          type,
         ),
     onForegroundMessage: (message) =>
         NotificationNavigation.showForegroundBanner(message, dataRepository),

@@ -12,6 +12,7 @@ import '../../../core/widgets/app_error_widget.dart';
 import '../../../core/widgets/app_loading_indicator.dart';
 import '../services/push_messaging_service.dart';
 import 'notification_formatters.dart';
+import 'report_link_screen.dart';
 import 'push_permission_banner.dart';
 
 /// Notification list shared by the citizen, technician and admin shells.
@@ -233,7 +234,15 @@ class _NotificationTile extends StatelessWidget {
       );
       return;
     }
-    unawaited(navigator.pushNamed(AppRouter.reportDetail, arguments: reportId));
+    unawaited(
+      navigator.pushNamed(
+        AppRouter.reportDetail,
+        arguments: ReportLinkArgs(
+          reportId,
+          type: notification.notificationType,
+        ),
+      ),
+    );
   }
 
   @override

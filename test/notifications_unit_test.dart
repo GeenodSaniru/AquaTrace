@@ -385,7 +385,7 @@ void main() {
     late FakeTokenStore tokens;
     late bool enabled;
     late bool backend;
-    late List<(String, String?)> opened;
+    late List<(String, String?, NotificationType?)> opened;
     late List<PushMessage> shown;
     late PushMessagingService service;
 
@@ -395,8 +395,8 @@ void main() {
         tokenStore: tokens,
         canUseBackend: (_) => backend,
         isUserEnabled: () => enabled,
-        onOpenReport: (reportId, notificationId) =>
-            opened.add((reportId, notificationId)),
+        onOpenReport: (reportId, notificationId, type) =>
+            opened.add((reportId, notificationId, type)),
         onForegroundMessage: shown.add,
       );
     }
@@ -651,10 +651,16 @@ void main() {
       await service.initialize();
       await service.bindUser('u1');
       client.opened.add(
-        const PushMessage(data: {'reportId': 'AT-7', 'notificationId': 'n7'}),
+        const PushMessage(
+          data: {
+            'reportId': 'AT-7',
+            'notificationId': 'n7',
+            'type': 'verification',
+          },
+        ),
       );
       await settle();
-      expect(opened, [('AT-7', 'n7')]);
+      expect(opened, [('AT-7', 'n7', NotificationType.verification)]);
     });
 
     test('a push tapped while signed out waits for sign-in', () async {
@@ -664,7 +670,7 @@ void main() {
       await service.initialize(); // cold start from the notification
       expect(opened, isEmpty);
       await service.bindUser('u1');
-      expect(opened, [('AT-8', 'n8')]);
+      expect(opened, [('AT-8', 'n8', null)]);
       // Consumed: a later account change must not replay it.
       await service.bindUser(null);
       await service.bindUser('u2');

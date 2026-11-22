@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/models/notification_item.dart';
+
 /// Result of the operating-system notification permission check.
 enum PushPermissionStatus {
   /// Not checked yet.
@@ -59,6 +61,15 @@ class PushMessage {
   String? get notificationId {
     final id = data['notificationId']?.trim();
     return (id == null || id.isEmpty) ? null : id;
+  }
+
+  /// Notification category from the payload, or `null` when absent. Unknown
+  /// values degrade to [NotificationType.update] rather than being trusted.
+  NotificationType? get type {
+    final raw = data['type']?.trim();
+    return (raw == null || raw.isEmpty)
+        ? null
+        : NotificationType.fromString(raw);
   }
 }
 
@@ -307,7 +318,12 @@ class PushMessagingService extends ChangeNotifier {
   final PushTokenStore _tokenStore;
   final bool Function(String uid) _canUseBackend;
   final bool Function() _isUserEnabled;
-  final void Function(String reportId, String? notificationId)? _onOpenReport;
+  final void Function(
+    String reportId,
+    String? notificationId,
+    NotificationType? type,
+  )?
+  _onOpenReport;
   final void Function(PushMessage message)? _onForegroundMessage;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -320,6 +336,7 @@ class PushMessagingService extends ChangeNotifier {
   bool _disposed = false;
   String? _pendingReportId;
   String? _pendingNotificationId;
+  NotificationType? _pendingType;
 
   /// Current OS permission state.
   PushPermissionStatus get status => _status;
@@ -547,18 +564,21 @@ class PushMessagingService extends ChangeNotifier {
       // destination screen re-checks authorization against the user's own data.
       _pendingReportId = reportId;
       _pendingNotificationId = message.notificationId;
+      _pendingType = message.type;
       return;
     }
-    _onOpenReport?.call(reportId, message.notificationId);
+    _onOpenReport?.call(reportId, message.notificationId, message.type);
   }
 
   void _dispatchPending() {
     final reportId = _pendingReportId;
     if (reportId == null) return;
     final notificationId = _pendingNotificationId;
+    final notificationType = _pendingType;
     _pendingReportId = null;
     _pendingNotificationId = null;
-    _onOpenReport?.call(reportId, notificationId);
+    _pendingType = null;
+    _onOpenReport?.call(reportId, notificationId, notificationType);
   }
 
   /// Visible for tests: simulates tapping a push while the app is signed in/out.

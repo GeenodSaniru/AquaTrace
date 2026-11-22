@@ -1,5 +1,37 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 09:03:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8B, Part 1/4: sync with team work and reconcile workflow events
+
+Branch `feature/notifications-history`. Prompt 8B is delivered in four parts, each committed and pushed when finished (Part 1 below; Parts 2–4 are appended above this entry as they land).
+
+### Preflight
+- Re-read `README.md`, `docs/MEMBER1_HANDOFF.md`, `functions/README.md`, `AquaTrace_Member_Prompts.md` (8B), and `update.md` (including Member 6/7 handoffs); inspected rules, functions, FCM setup and the UI reference (`docs/AquaTrace UI.pdf` contact sheet + `docs/ui_pdf_extracted_text.txt`: notification list, notification examples, admin Activity History).
+- `git fetch`: `origin/main` has no new commits. Member 7's community verification / dispute work and Member 6's technician security fixes live on `origin/test` (13 commits, not yet in `main`). Members 3 and 5 are already in `main`.
+
+### Completed
+- **Merged `origin/test` into this branch** (the real Member 6 + Member 7 workflow code that notifications must integrate with). Conflicts resolved in `data_repository.dart` (both feature sets kept), `shared_notifications_view.dart` (my list kept; their "verification → verify screen" tap behaviour re-implemented below) and `update.md` (both logs kept).
+- **Contract audit finding (fixed):** Member 7's repository inserted notifications into an in-memory list addressed to *other* users' uids and hard-coded the demo admin uid. With Firestore those records were never persisted or delivered. They now go through `_demoNotify`, which only delivers in demo mode (no backend) into the **recipient's own inbox**, and does nothing when a real notification gateway is in use (the backend creates them — see Part 2). A spy-gateway test proves a real-gateway client performs zero writes.
+- **Typed deep link:** `ReportLinkArgs(reportId, type)` / push payload `type`. A `verification` notification for a *completed* repair opens Member 7's `CitizenVerificationScreen` only for a citizen who is neither the reporter nor the assigned technician; the assigned technician still gets Job Details; everyone else gets Activity History. Stale links (repair no longer completed) fall back to history. The legacy string argument still works.
+- **Unique audit ids** for Member 7's verification / dispute activity events (they used millisecond ids, same collision as in 8A).
+- Milestone ("Community Verified") notifications are sent once, not on later votes (test).
+
+### Changes to other members' files (please review)
+- `lib/core/services/data_repository.dart` — merge resolution; Member 7's `_notifications.insert(...)` blocks replaced by `_demoNotify(...)`.
+- `test/community_verification_test.dart` — 3 assertions read the old shared in-memory notification list; they now read each recipient's own inbox (`inboxOf` helper). No other test logic changed.
+
+### Checks (2026-11-22, Windows 11, Flutter 3.47.4 / Dart 3.13.3)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 86 files, 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **197/197** (merged suite incl. Member 6/7 tests, 150 from 8A, +13 new in this part) |
+
+### Found for Part 2 (not fixed yet)
+- Member 7's `FirebaseCommunityVerificationGateway` writes vote/dispute documents with extra fields (`voterName`, `evidenceImageUrl`) and updates `verificationCount` / `disputeCount` / `status` / activity directly. `firestore.rules` allow only a fixed key set on those documents and reserve counters / the `disputed` flip for Cloud Functions, so this path is rejected by the rules as written. Part 2 aligns the rules and adds the server-side aggregation + notification triggers.
+
+### Git
+- Merge commit on `feature/notifications-history`; no Claude co-author trailer. Hash and push result are in the hand-off message.
+
 ## 2026-11-21 11:04:29 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8A: notifications, FCM client and report activity history
 
 Branch: `feature/notifications-history` (from `main` @ `353ee30`). Module code: `lib/features/notifications/`.
@@ -63,6 +95,366 @@ Test coverage highlights: permission denied / granted / unsupported / plugin fai
 
 ### Git
 - Committed on `feature/notifications-history`; only Member 8 task files staged (the temporary preview entrypoint was deleted, not committed). The commit hash and push result are reported in the hand-off message (a log entry cannot contain its own hash).
+## 2026-11-21 09:38:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Final Verification QA, Release Build & Handoff
+
+### Completed
+- Completed final QA, release build validation, and handoff documentation for Community Verification & Dispute Management:
+  - Verified full production release build for Web (`flutter build web --release --no-wasm-dry-run`).
+  - Executed complete project-wide test suite across all 8 modules (**104/104 tests passing** with 0 failures).
+  - Executed static analysis across repository (**0 errors, 0 warnings**).
+  - Validated code formatting across all files.
+
+### Configured Assumptions & Architecture Defaults
+1. **Verification Radius**:
+   - **Default: 5.0 km**. In Sri Lankan municipal contexts (e.g. Colombo Municipal Council), a 5.0 km radius encompasses contiguous neighborhood water feeder loops and pressure zones while preventing remote gaming.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(radiusKm: ...)` and resettable via `resetDefaults()`.
+2. **Milestone Confirmation Threshold**:
+   - **Default: 3 independent community confirmations**. Once 3 eligible citizens independently confirm resolution, the report milestone transitions to "Community Verified" and celebration notifications are dispatched to the reporter, assigned technician, and admin workflow.
+   - **Runtime Configurable**: Configurable via `CommunityVerificationService.configure(threshold: ...)` and resettable via `resetDefaults()`.
+3. **Strict Eligibility & Conflict of Interest Guards**:
+   - Only authenticated citizens (`UserRole.citizen`) can verify or dispute.
+   - Original reporter cannot verify or dispute their own report.
+   - Assigned field technician cannot audit or verify their own repair work.
+   - Duplicate voting is strictly blocked per user per report.
+4. **Concurrency & Race Condition Protection**:
+   - In-memory atomic submission locking (`_submissionsInFlight`) prevents double-voting races and concurrent submission anomalies.
+
+### Unresolved Backend & Cloud Dependencies
+- **Firebase Cloud Functions**: Production automatic counter triggers and server-side push notifications require Cloud Functions deployment (event payload contracts defined in `DataRepository`).
+- **Firestore Security Rules**: Rules for verification/dispute collections (`/reports/{reportId}/verifications/{voterUid}` and `/reports/{reportId}/disputes/{voterUid}`) are defined in `firestore.rules` and should be deployed via `firebase deploy --only firestore:rules` when production deployment is initiated.
+- **Physical Hardware**: Mobile GPS sensor permissions and physical camera picker behavior rely on runtime device/OS permissions; verified in unit/widget tests via injected mock providers.
+
+### Handoff Notes for Member 8 (Notifications & History)
+- Community verification and dispute actions dispatch typed notification events (`verification`, `dispute`) through `DataRepository`.
+- All verification and dispute actions append immutable events to the report activity timeline (`ActivityTimelineEvent`), ready for Member 8's FCM push triggers and chronological timeline presentation.
+- Member 7 scope is 100% complete across community verification and dispute modules.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+| `flutter test` | Pass — 104/104 tests green across the entire repository. |
+| `flutter build web --release --no-wasm-dry-run` | Pass — `build/web` generated. |
+
+## 2026-11-21 09:35:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Verification Regression Suite & Defect Hardening
+
+### Completed
+- Authored comprehensive verification regression test suite in `test/community_verification_test.dart` (expanded from 16 to 26 unit and widget tests):
+  - Unauthenticated user rejection: verifies `checkEligibility` blocks unauthenticated (`null`) users with clear sign-in guidance.
+  - Unavailable GPS / location coordinates: validates rejection when latitude or longitude is null.
+  - Dispute validation: enforces mandatory non-empty dispute reason and rejects oversized (>10 MB) evidence images.
+  - Stale / non-existent report resilience: throws `DatabaseException` when attempting verification or dispute on non-existent reports.
+  - Gateway & network error handling: verifies simulated network failures during Firestore or Storage writes do not leave local report states dirty, mutate vote counts, or leak in-flight concurrency locks.
+  - In-flight submission concurrency: verifies `_submissionsInFlight` lock prevents simultaneous parallel submissions for the same report and voter.
+  - Full end-to-end lifecycle verification:
+    - Initial completed report audited by nearby citizens.
+    - Confirmations 1 and 2 increment `verificationCount` with voter record persistence.
+    - 3rd confirmation automatically logs the `Community Verified` milestone and dispatches celebrations to reporter, technician, and admin.
+    - Subsequent citizen dispute reopens report to `FaultStatus.disputed` and alerts all stakeholders.
+    - Admin reviews dispute in `AdminReportsView` and reassigns report to a new technician, cleanly progressing status back to `FaultStatus.assigned`.
+  - Widget tests for `CitizenVerificationScreen`:
+    - Renders "Community Verified ✓" celebration badge when the 3-confirmation threshold is satisfied.
+    - Renders action buttons "Confirm Repair Resolution" and "Raise Dispute (Report Ongoing Issue)" for eligible citizens.
+- Verified zero static analysis defects and cleanly formatted code across the entire repository.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted (0 changes needed). |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 26/26 tests green. |
+
+### Outstanding
+- Full repository release build verification (`flutter build web --release`), complete repository test suite pass (104+ tests), final documentation of configured radius/threshold assumptions and unresolved backend dependencies, and handoff completion.
+
+## 2026-11-20 23:08:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Report Lifecycle Integration & Community Dispute Management
+
+### Completed
+- Completed report lifecycle integration for community verification and disputes:
+  - Valid dispute handling: submitting a dispute against a completed repair automatically moves the case into `FaultStatus.disputed` (reopened), records an auditable timeline event in `activityTimeline`, and notifies:
+    - Admin workflow (`demo-admin-003`) for review and reassignment
+    - Assigned technician regarding the dispute on their completed repair
+    - Original reporter that their report has been disputed and reopened
+    - Disputing citizen confirming their dispute submission was recorded
+  - Successful verification: recorded with unique voter identity (`VerificationVoteModel`), double-counting prevented via atomic in-memory concurrency locks (`_submissionsInFlight`) and duplicate vote guards.
+  - Verification milestone notifications: upon reaching the 3-confirmation threshold, automatically dispatches milestone celebrations to original reporter, assigned technician, and admin workflow.
+  - Configurable parameters & documented assumptions:
+    - Proximity Radius: default 5.0 km (covers municipal contiguous water distribution segments in Sri Lanka, e.g. Colombo Municipal Council); runtime configurable via `CommunityVerificationService.configure(radiusKm: ...)`.
+    - Verification Threshold: default 3 confirmations (independent peer confirmations required for community verification milestone); runtime configurable via `CommunityVerificationService.configure(threshold: ...)`.
+    - Eligibility Assumptions: authenticated citizen role, reporter self-verification prohibited, assigned technician audit prohibited, completed status requirement, proximity radius requirement.
+  - Coordinated Admin dispute review with Member 5:
+    - Integrated community dispute counts, dispute reason/explanation cards, before/after evidence comparison, and a "View Community Verification Audit" CTA in `AdminReportsView`.
+    - Integrated with Member 8 notification system (`SharedNotificationsView`) routing directly to `/verify-repair`.
+- Executed QA suite: `dart format`, `flutter analyze` (0 issues), and `flutter test` across all unit and widget tests (including 16/16 verification tests).
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — cleanly formatted. |
+| `flutter analyze --no-pub` | Pass — 0 issues found. |
+| `flutter test test/community_verification_test.dart` | Pass — 16/16 tests green. |
+| `flutter test` | Pass — all tests green. |
+
+### Open Questions & Handoff Notes
+- In a production environment with multi-instance backend or Cloud Functions, `_submissionsInFlight` should be supplemented with Firestore transaction isolation rules and backend Cloud Functions triggers (already mirrored in `firestore.rules`).
+- Member 5's Admin workflow can reassign disputed reports to new technicians, which resets/progresses the report status appropriately as verified in `community_verification_test.dart`.
+
+## 2026-11-17 23:35:51 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Automated Verification Tests & Final QA
+
+### Completed
+- Added automated test suite `test/community_verification_test.dart` with 12 comprehensive unit and widget tests:
+  - Haversine great-circle distance calculation for proximity checking.
+  - Verification eligibility validation for nearby authenticated citizens.
+  - Ineligible user role rejection (admin, technician acting as community verifier).
+  - Conflict-of-interest prevention: original reporter cannot verify their own report.
+  - Conflict-of-interest prevention: assigned technician cannot verify their own repair work.
+  - Non-completed report verification rejection (pending/ongoing reports cannot be audited).
+  - Duplicate voting prevention: citizen cannot cast multiple verification or dispute votes on the same report.
+  - Verification radius rejection: citizens outside the 5.0 km radius are blocked.
+  - Verification threshold progression: 3rd confirmation automatically logs the "Community Verified" milestone event.
+  - Dispute submission: automatically transitions report status from `completed` to `disputed`, increments dispute counter, creates an audit timeline entry, and dispatches a dispute alert notification.
+  - Widget test: `CitizenVerificationScreen` rendering of report details, audit progress bar, Before/After evidence, and verification actions.
+- Executed full QA suite across repository: 90/90 tests passing, 0 static analysis issues, 0 formatting issues.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib test` | Pass — all files cleanly formatted. |
+| `flutter analyze` | Pass — 0 errors, 0 warnings. |
+| `flutter test test/community_verification_test.dart` | Pass — 12/12 tests green. |
+| `flutter test` | Pass — 90/90 tests green across the entire repository. |
+
+### Handoff Notes & Environmental Blockers
+- Member 7 owns community verification and dispute workflows.
+- Verification threshold is set to 3 independent community votes.
+- Proximity verification enforces a 5.0 km radius with automatic GPS lookup and graceful fallback for desktop/emulator development.
+- Live Firebase Cloud Functions for backend threshold triggers and Firestore security rules remain defined in `firestore.rules` for production deployment.
+
+## 2026-11-17 23:06:04 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Citizen Verification UI & Dispute Flow
+
+### Completed
+- Built `CitizenVerificationScreen` (`lib/features/verification/presentation/citizen_verification_screen.dart`):
+  - Displays report header, fault type, priority, status badge, and assigned technician.
+  - Implemented proximity banner computing real-time GPS distance with Haversine formula and graceful fallback for desktop/emulator environments.
+  - Added visual 5.0 km radius eligibility indicator with distance readout and status warnings.
+  - Integrated `VerificationEvidenceCard` with interactive Before/After photo tabs and technician notes.
+  - Added community audit progress bar displaying votes towards the 3-vote milestone threshold, with "Community Verified ✓" celebration badge upon completion.
+  - Rendered existing resident verification notes and dispute records.
+  - Added confirmation resolution sheet and structured dispute dialog with reason categories, mandatory explanations, and optional camera/gallery photo evidence attachment.
+- Added `/verify-repair` route to `AppRouter` with arguments support.
+- Connected "Verify Repair" notifications in `SharedNotificationsView` to route directly to `CitizenVerificationScreen`.
+- Added "Community Verification & Audit" CTA button in `SharedReportsView` report detail sheet for completed/disputed reports.
+- Added "Repairs Awaiting Verification" list to `CitizenHomeView` for easy community discovery.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core lib/features` | Pass — 62 files checked. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+
+### Remaining
+- Automated verification workflow tests (`test/community_verification_test.dart`), full QA, and final handoff.
+
+## 2026-11-17 23:01:00 +05:30 (Asia/Colombo, UTC+05:30) — Member 7: Core Verification Engine & Contracts
+
+### Completed
+- Completed repository preflight inspection of README, docs/AquaTrace UI.pdf, ui_pdf_extracted_text.txt, 12_Proposal.pdf, and firestore.rules.
+- Implemented `VerificationVoteModel` (`/reports/{reportId}/verifications/{voterUid}`) for community repair audit votes.
+- Implemented `DisputeRecordModel` (`/reports/{reportId}/disputes/{voterUid}`) for citizen disputes.
+- Created `CommunityVerificationGateway` and `FirebaseCommunityVerificationGateway` supporting Firestore transactional writes, audit timeline events, and Storage upload for dispute evidence.
+- Created `CommunityVerificationService` with Haversine distance calculation, proximity radius enforcement (5.0 km default), 3-vote milestone threshold, and eligibility guards (citizen role requirement, reporter conflict-of-interest prevention, assigned technician conflict-of-interest prevention, duplicate vote guard).
+- Integrated verification and dispute stores into `DataRepository` with mock seed data, query methods, verification submission, and dispute submission with automatic status reopening to `FaultStatus.disputed`.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core lib/features/verification` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
+
+### Remaining
+- Citizen verification UI screens, before/after photo comparison, and dispute dialogs.
+- Automated verification unit/widget tests and QA.
+
+## 2026-11-16 15:19:21 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 corrective audit
+
+### Fixed
+- Preserved the selected job during technician-to-map navigation handoff.
+- Removed the cached-report fallback from job details so deleted jobs no longer remain visible after refresh.
+- Added live activity timeline entries to the technician job history.
+- Rejected unsupported photo extensions instead of silently treating them as JPEG.
+- Synchronized repair-note text with refreshed report data without overwriting active technician edits.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_home_view.dart lib/features/technician/presentation/technician_job_detail_screen.dart` | Pass. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Merge-conflict marker scan | Pass — none found in Dart or Markdown. |
+| Dart hot restart | Not run — no Flutter app connected to the Dart Tooling Daemon. |
+
+### Remaining environment limitations
+- Live Firebase Firestore/Storage permissions, weak-network behavior, physical camera/storage permissions, and device image-picker behavior require an authenticated Firebase account, emulator, or physical device.
+
+## 2026-11-16 15:04:14 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 4
+
+### Completed
+- Completed final technician regression and handoff QA for login role routing, assigned queue filtering, job details, navigation/map handoff, status workflow, notes, evidence gating, assignment refresh, stale assignment protection, job history, and admin-action restrictions.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+- Reviewed the final Git diff and verified only the Section 4 update-log change remains locally.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 78/78. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart Tooling Daemon app discovery | No connected Flutter app found. |
+| Dart hot restart / interactive launch | Not run — requires a connected debug Flutter app. |
+
+### Handoff notes and limitations
+- Member 1 owns authentication, role provisioning, routing, shared models, and Firebase initialization.
+- Member 4 owns the shared map surface and navigation handoff.
+- Member 5 owns admin assignment and dispatch actions.
+- Member 8 owns notification delivery and activity presentation.
+- Live Firestore/Storage permissions, weak-network retries, camera/storage permission denial, and physical-device picker behavior require an authenticated Firebase technician account, emulator, or device.
+- Prompt 6C Section 4 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-16 11:17:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 3
+
+### Completed
+- Added a stale-assignment guard to the technician job detail screen.
+- When a job is reassigned, removed, or no longer belongs to the signed-in technician, cached job details and technician actions are hidden.
+- Job detail rendering now reads the latest report from `DataRepository`, so status, notes, evidence, and assignment changes refresh from shared state.
+- Revalidated technician login-role assumptions, queue reassignment behavior, workflow refresh, ownership checks, and admin-action restrictions.
+
+### Files changed
+- `lib/features/technician/presentation/technician_job_detail_screen.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib/features/technician/presentation/technician_job_detail_screen.dart lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart test/admin_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+| Technician widget harness test | Not retained — the isolated detail-screen harness hung before completing despite bounded pumps; production guard was validated by analyzer and deterministic repository workflow tests. |
+
+### Outstanding
+- Section 4 will run the final full test suite, formatter/analyzer, web build, launch/runtime availability check, and final handoff QA.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-16 08:48:58 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 2
+
+### Completed
+- Added explicit role validation to admin-only technician assignment and report-severity operations.
+- Updated the admin report UI to pass the authenticated administrator role to repository mutations.
+- Added regression coverage proving technician-role calls cannot assign jobs or change report severity.
+- Re-ran technician queue, transition, ownership, assignment, and failure-path tests after the authorization change.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `lib/features/admin/presentation/admin_reports_view.dart`
+- `test/admin_workflow_test.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart lib/features/admin/presentation/admin_reports_view.dart test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/admin_workflow_test.dart test/technician_workflow_test.dart` | Pass — 18/18. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 3–4 will cover full UI workflow/refresh checks, upload and permission failure paths, final launch/build QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 19:11:52 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6C regression and handoff Section 1
+
+### Completed
+- Reviewed the technician implementation, role/authentication flow, shared contracts, handoff notes, Git status, and technician UI reference screens in `docs/AquaTrace UI.pdf` and `docs/ui_pdf_extracted_text.txt`.
+- Prevented blank technician identities from exposing malformed or unassigned jobs through the local technician queue.
+- Rejected technician status, notes, and evidence operations without a valid technician identity.
+- Rejected admin assignments missing a technician UID or technician name.
+- Added regression tests for missing assignment data and identity-boundary enforcement.
+
+### Files changed
+- `lib/core/services/data_repository.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/core/services/data_repository.dart test/technician_workflow_test.dart` | Pass. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 11/11. |
+| `flutter analyze` | Pass — no issues found. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Sections 2–4 will cover full role/login and UI workflow regression, failure-path verification, final build/launch QA, and handoff documentation.
+- Live Firebase permissions, network failures, physical camera/storage permissions, and device launch remain environment-dependent.
+
+## 2026-11-15 18:59:57 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 3
+
+### Completed
+- Performed final Prompt 6B QA for technician assignment filtering, workflow transitions, ownership checks, evidence gating, error handling, and shared report synchronization.
+- Confirmed technician Firestore reads are scoped to `assignedTechnicianUid == auth.uid`.
+- Confirmed technician transitions remain limited to `assigned -> ongoing -> completed`, with completion requiring after-repair evidence.
+- Confirmed repair evidence uses technician-scoped Firebase Storage rules and invalid/offline operations do not mutate local report state.
+- Confirmed no unresolved merge-conflict markers remain in Dart or Markdown files.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format --set-exit-if-changed lib test` | Pass — 62 files checked, 0 changed. |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+| Dart hot restart | Not run — no Flutter app was connected to the Dart Tooling Daemon. |
+
+### Outstanding
+- Live Firestore/Storage permission behavior, network retry behavior, and physical image-picker permissions still require an authenticated Firebase technician account or emulator/device.
+- Section 3 is ready for manual upload to the GitHub `test` branch.
+
+## 2026-11-15 14:15:30 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 2
+
+### Completed
+- Added technician dashboard feedback for report synchronization errors and retry, plus a loading indicator while assigned jobs are being fetched.
+- Added integration regression coverage for assignment changes, reassignment queue visibility, offline/demo photo upload rejection, invalid repair notes, invalid image types, ownership, and transition enforcement.
+- Verified failed preconditions leave the report unchanged rather than presenting a success-shaped state.
+
+### Files changed
+- `lib/features/technician/presentation/technician_home_view.dart`
+- `test/technician_workflow_test.dart`
+- `update.md`
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `dart format lib/features/technician/presentation/technician_home_view.dart test/technician_workflow_test.dart` | Pass |
+| `flutter analyze` | Pass — no issues found. |
+| `flutter test test/technician_workflow_test.dart` | Pass — 8/8. |
+| `flutter test` | Pass — 73/73. |
+| `flutter build web --no-wasm-dry-run` | Pass — `build/web` generated. |
+| `git diff --check` | Pass. |
+
+### Outstanding
+- Section 3 will perform final Prompt 6B launch/build review and document live Firebase/offline environment blockers.
+- Real network failure/retry and Storage upload failure require an authenticated Firebase technician account or emulator.
 
 ## 2026-11-15 11:29:05 +05:30 (Asia/Colombo, UTC+05:30) — Member 6 Prompt 6B integration Section 1
 

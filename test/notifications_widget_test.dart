@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:aquatrace/core/constants/app_roles.dart';
+import 'package:aquatrace/core/constants/fault_constants.dart';
 import 'package:aquatrace/core/models/firestore_time.dart';
 import 'package:aquatrace/core/models/mock_data.dart';
 import 'package:aquatrace/core/models/notification_item.dart';
+import 'package:aquatrace/core/models/report_model.dart';
+import 'package:aquatrace/features/verification/presentation/citizen_verification_screen.dart';
 import 'package:aquatrace/core/navigation/app_router.dart';
 import 'package:aquatrace/core/navigation/navigation_service.dart';
 import 'package:aquatrace/core/services/auth_service.dart';
@@ -82,6 +85,7 @@ Future<NotificationHarness> buildHarness(
   FakePushClient? client,
   bool pushEnabled = true,
   bool signedIn = true,
+  List<ReportModel>? reports,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = PreferencesService(await SharedPreferences.getInstance());
@@ -94,7 +98,7 @@ Future<NotificationHarness> buildHarness(
       InMemoryNotificationGateway(
         seed: {uid: seed ?? const <NotificationItem>[]},
       );
-  final repo = DataRepository(notificationGateway: gw);
+  final repo = DataRepository(notificationGateway: gw, initialReports: reports);
   repo.bindNotificationUser(uid);
 
   final fakeClient =
@@ -104,8 +108,8 @@ Future<NotificationHarness> buildHarness(
     client: fakeClient,
     tokenStore: tokens,
     isUserEnabled: () => pushEnabled,
-    onOpenReport: (reportId, notificationId) =>
-        NotificationNavigation.openReport(repo, reportId, notificationId),
+    onOpenReport: (reportId, notificationId, type) =>
+        NotificationNavigation.openReport(repo, reportId, notificationId, type),
     onForegroundMessage: (message) =>
         NotificationNavigation.showForegroundBanner(message, repo),
   );
@@ -711,6 +715,7 @@ void main() {
         technicianUid: MockData.technicianUser.uid,
         technicianName: MockData.technicianUser.displayName,
         adminName: 'Dilani Wickramasinghe',
+        actorRole: 'Admin',
       );
       await tester.pump();
       await tester.pump();
@@ -802,6 +807,174 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ActivityHistoryScreen), findsOneWidget);
       expect(find.text('Report Submitted'), findsOneWidget);
+    });
+  });
+
+  group('Notification destination by type and role', () {
+    ReportModel completedReportBy(String reporterUid) => MockData.initialReports
+        .firstWhere((r) => r.reportId == 'AT-2026-00126')
+        .copyWith(reporterUid: reporterUid);
+
+    testWidgets(
+      'a verification request opens the verify screen for a nearby citizen',
+      (tester) async {
+        final h = await buildHarness(tester);
+        await pumpScreen(
+          tester,
+          h,
+          const ReportLinkScreen(
+            reportId: 'AT-2026-00126',
+            type: NotificationType.verification,
+          ),
+        );
+        expect(find.byType(CitizenVerificationScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('other notification types open the history instead', (
+      tester,
+    ) async {
+      final h = await buildHarness(tester);
+      for (final type in [
+        NotificationType.update,
+        NotificationType.assignment,
+        NotificationType.approval,
+        NotificationType.dispute,
+        null,
+      ]) {
+        await pumpScreen(
+          tester,
+          h,
+          ReportLinkScreen(reportId: 'AT-2026-00126', type: type),
+        );
+        expect(
+          find.byType(ActivityHistoryScreen),
+          findsOneWidget,
+          reason: '$type',
+        );
+        expect(find.byType(CitizenVerificationScreen), findsNothing);
+      }
+    });
+
+    testWidgets(
+      'the reporter of a completed repair cannot be sent to verify it',
+      (tester) async {
+        final h = await buildHarness(
+          tester,
+          reports: [completedReportBy(MockData.citizenUser.uid)],
+        );
+        await pumpScreen(
+          tester,
+          h,
+          const ReportLinkScreen(
+            reportId: 'AT-2026-00126',
+            type: NotificationType.verification,
+          ),
+        );
+        expect(find.byType(ActivityHistoryScreen), findsOneWidget);
+        expect(find.byType(CitizenVerificationScreen), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the repairing technician and admins are never sent to the verify screen',
+      (tester) async {
+        for (final role in [UserRole.technician, UserRole.admin]) {
+          final h = await buildHarness(tester, role: role);
+          await pumpScreen(
+            tester,
+            h,
+            const ReportLinkScreen(
+              reportId: 'AT-2026-00126',
+              type: NotificationType.verification,
+            ),
+          );
+          expect(
+            find.byType(CitizenVerificationScreen),
+            findsNothing,
+            reason: '$role',
+          );
+        }
+      },
+    );
+
+    testWidgets('a repair that is no longer completed opens the history', (
+      tester,
+    ) async {
+      // Stale notification: the repair was disputed after the request was sent.
+      final h = await buildHarness(
+        tester,
+        reports: [
+          completedReportBy('someone-else')
+              .copyWith(status: FaultStatus.disputed),
+        ],
+      );
+      await pumpScreen(
+        tester,
+        h,
+        const ReportLinkScreen(
+          reportId: 'AT-2026-00126',
+          type: NotificationType.verification,
+        ),
+      );
+      expect(find.byType(ActivityHistoryScreen), findsOneWidget);
+    });
+
+    testWidgets(
+      'tapping a "Verify Repair" notification in the list opens the verify screen',
+      (tester) async {
+        final h = await buildHarness(
+          tester,
+          seed: [
+            note(
+              'verify-1',
+              at: DateTime.now().subtract(const Duration(hours: 1)),
+              reportId: 'AT-2026-00126',
+              type: 'verification',
+            ),
+          ],
+        );
+        await pumpScreen(tester, h, const SharedNotificationsView());
+        await tester.tap(find.text('Title verify-1'));
+        await tester.pump();
+        await tester.pump();
+        expect(find.byType(CitizenVerificationScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('a verification push tap carries its type to the destination', (
+      tester,
+    ) async {
+      final h = await buildHarness(tester);
+      await pumpScreen(tester, h, const SharedNotificationsView());
+      h.client.opened.add(
+        const PushMessage(
+          data: {
+            'reportId': 'AT-2026-00126',
+            'notificationId': 'x',
+            'type': 'verification',
+          },
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(CitizenVerificationScreen), findsOneWidget);
+    });
+
+    testWidgets('the legacy string argument still opens the history', (
+      tester,
+    ) async {
+      final h = await buildHarness(tester);
+      await pumpScreen(tester, h, const SharedNotificationsView());
+      unawaited(
+        NavigationService.navigatorKey.currentState!.pushNamed(
+          AppRouter.reportDetail,
+          arguments: 'AT-2026-00124',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ActivityHistoryScreen), findsOneWidget);
     });
   });
 

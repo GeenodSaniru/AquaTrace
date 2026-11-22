@@ -4,29 +4,50 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_roles.dart';
+import '../../../core/constants/fault_constants.dart';
+import '../../../core/models/notification_item.dart';
 import '../../../core/services/data_repository.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_loading_indicator.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../technician/presentation/technician_job_detail_screen.dart';
+import '../../verification/presentation/citizen_verification_screen.dart';
 import '../services/push_messaging_service.dart';
 import 'activity_history_screen.dart';
+
+/// Arguments for the `/reports/detail` route.
+///
+/// [type] is the kind of notification that led here (if known); it lets a
+/// "Verify Repair" request open the community verification screen.
+class ReportLinkArgs {
+  const ReportLinkArgs(this.reportId, {this.type});
+
+  final String reportId;
+  final NotificationType? type;
+}
 
 /// Destination for notification taps and push deep links.
 ///
 /// Resolves the report **from the signed-in user's own data**, so a link can
 /// never reveal a report the user is not allowed to read:
 /// * the assigned technician is taken to the job detail screen;
+/// * a nearby citizen opening a *verification* notification for a completed
+///   repair is taken to the community verification screen (which re-checks
+///   eligibility itself);
 /// * everyone else sees the report's activity history.
 /// Unknown, deleted or inaccessible reports show a clear "unavailable" state.
 class ReportLinkScreen extends StatefulWidget {
   const ReportLinkScreen({
     super.key,
     required this.reportId,
+    this.type,
     this.loadGrace = const Duration(seconds: 3),
   });
 
   final String reportId;
+
+  /// Notification type that triggered the link, if known.
+  final NotificationType? type;
 
   /// How long to wait for the live report list before declaring the report
   /// unavailable (reports stream in after sign-in).
@@ -91,8 +112,18 @@ class _ReportLinkScreenState extends State<ReportLinkScreen> {
       final isAssignedTechnician =
           auth.currentRole == UserRole.technician &&
           report.assignedTechnicianUid == auth.currentUser?.uid;
-      return isAssignedTechnician
-          ? TechnicianJobDetailScreen(report: report)
+      if (isAssignedTechnician) {
+        return TechnicianJobDetailScreen(report: report);
+      }
+      final userUid = auth.currentUser?.uid;
+      final canBeAskedToVerify =
+          widget.type == NotificationType.verification &&
+          auth.currentRole == UserRole.citizen &&
+          report.status == FaultStatus.completed &&
+          report.reporterUid != userUid &&
+          report.assignedTechnicianUid != userUid;
+      return canBeAskedToVerify
+          ? CitizenVerificationScreen(reportId: report.reportId)
           : ActivityHistoryScreen(reportId: report.reportId);
     }
 

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/models/notification_item.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/navigation/navigation_service.dart';
 import '../../core/services/data_repository.dart';
+import 'presentation/report_link_screen.dart';
 import 'services/push_messaging_service.dart';
 
 /// Glue between push messages and in-app navigation.
@@ -19,14 +21,15 @@ class NotificationNavigation {
   static void openReport(
     DataRepository repository,
     String reportId,
-    String? notificationId,
-  ) {
+    String? notificationId, [
+    NotificationType? type,
+  ]) {
     if (notificationId != null) {
       repository.notificationStore.markReadWhenAvailable(notificationId);
     }
     final navigation = NavigationService.navigateTo<void>(
       AppRouter.reportDetail,
-      arguments: reportId,
+      arguments: ReportLinkArgs(reportId, type: type),
     );
     if (navigation != null) unawaited(navigation);
   }
@@ -66,8 +69,12 @@ class NotificationNavigation {
               ? null
               : SnackBarAction(
                   label: 'View',
-                  onPressed: () =>
-                      openReport(repository, reportId, message.notificationId),
+                  onPressed: () => openReport(
+                    repository,
+                    reportId,
+                    message.notificationId,
+                    message.type,
+                  ),
                 ),
         ),
       );
