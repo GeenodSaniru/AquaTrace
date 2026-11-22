@@ -1,5 +1,41 @@
 # AquaTrace — Update Log
 
+## 2026-11-22 19:16:09 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 3/4: client QA — accessibility, stale references, offline, FCM permission edge cases
+
+Branch `feature/notifications-history`. Builds on Parts 1–2.
+
+### Method
+New `test/notifications_layout_test.dart` (15 tests) drives the notification list, permission banner and activity history on a **320 px phone** at **1×, 1.3× and 2× text**, in **light and dark** themes, with long titles / bodies, a 100-item inbox, stale references and failing connections. Layout errors (RenderFlex overflow) fail a test on their own. The widget-test harness moved to `test/support/notification_harness.dart` so both widget test files share it.
+
+### Bugs found and fixed (all reproduced first)
+1. **Notification list overflowed at large text sizes** (accessibility "Extra Large" / OS 200%): the permission banner sat in a fixed `Column` above the list and pushed it **194 px past the screen**. The body is now one `CustomScrollView` (banner scrolls with the content; loading / empty / error states use `SliverFillRemaining`).
+2. **App-bar "Mark all read" overflowed the toolbar by 35 px** at 2× text. The action now follows the user's text size up to 1.2× (`MediaQuery.withClampedTextScaling`); the list content still scales fully.
+3. **Revoking notification permission in system settings left this device registered**: the token document stayed on the account and the backend kept targeting a device that can no longer show pushes. `refreshStatus` (also run when the app resumes) now removes the token and invalidates the device token when permission turns `denied`; re-granting registers a fresh token; refresh events while denied are ignored; a never-granted device has nothing to clean up.
+
+### Verified (test results, no defects found)
+- Touch targets ≥ 48 px with semantics labels ("Unread / Read notification. …"); unread badge count equals the list; a 100-item inbox scrolls to the end.
+- **Stale references:** a notification whose report no longer exists opens "Report unavailable" and is still marked read.
+- **Offline / connection lost after data loaded:** saved notifications stay visible with "Showing saved notifications. …" (no error screen); retry restores live data. **Mark-all-read offline:** failure is reported and unread state restored; works once back online.
+- **Missing timestamps:** unknown times are labelled "Time unavailable" and sorted last (list) / first (timeline); pending (unconfirmed) local audit events use the local clock (Part 2).
+- **Permission granted / denied, token register / refresh / remove:** covered in `notification_preferences_test.dart` (21 tests) and `notifications_unit_test.dart` — request is user-initiated only, denial registers nothing, refresh replaces the token, sign-out / account switch / push-off removes it, demo identities never register.
+
+### Files changed
+`lib/features/notifications/presentation/shared_notifications_view.dart`, `lib/features/notifications/services/push_messaging_service.dart`, `lib/features/notifications/services/in_memory_notification_gateway.dart` (`failStream` for tests), `test/notifications_layout_test.dart` (new), `test/support/notification_harness.dart` (new, extracted), `test/notifications_widget_test.dart`, `test/notification_preferences_test.dart` (+5), `update.md`.
+
+### Checks (2026-11-22)
+| Command | Result |
+|---------|--------|
+| `dart format --output=none --set-exit-if-changed lib test` | Pass — 0 changes |
+| `flutter analyze` | Pass — no issues found |
+| `flutter test` | Pass — **249/249** (229 + 20 new) |
+| `npm test` (in `functions/`) | Pass — **61/61** |
+
+### Environment-only limitations (not code defects)
+Foreground / background / terminated push rendering and cold-start taps need a physical device or emulator with a deployed backend; they are covered with fakes only.
+
+### Git
+- Committed on `feature/notifications-history`, no Claude co-author trailer. Hash / push result in the hand-off message.
+
 ## 2026-11-22 19:06:08 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 2/4: backend delivery path verified with fakes (order, replay, preferences, missing users)
 
 Branch `feature/notifications-history`. Builds on Part 1.

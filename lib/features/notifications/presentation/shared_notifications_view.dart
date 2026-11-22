@@ -48,39 +48,43 @@ class SharedNotificationsView extends StatelessWidget {
         title: const Text('Notifications'),
         actions: [
           if (unread.isNotEmpty)
-            TextButton(
-              onPressed: store.markAllAsRead,
-              child: const Text(
-                'Mark all read',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+            // The toolbar has a fixed height and little width: let this action
+            // follow the user's text size only up to 1.2x so it never pushes
+            // the title out at accessibility sizes (the list itself scales fully).
+            MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.2,
+              child: TextButton(
+                onPressed: store.markAllAsRead,
+                child: const Text(
+                  'Mark all read',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),
         ],
       ),
-      body: Column(
-        children: [
-          const PushPermissionBanner(),
-          Expanded(
-            child: _buildContent(
-              context,
-              isDark: isDark,
-              isLoading: store.isLoading,
-              errorMessage: store.errorMessage,
-              onRetry: store.retry,
-              unread: unread,
-              read: read,
-            ),
+      body: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(child: PushPermissionBanner()),
+          ..._buildContentSlivers(
+            context,
+            isDark: isDark,
+            isLoading: store.isLoading,
+            errorMessage: store.errorMessage,
+            onRetry: store.retry,
+            unread: unread,
+            read: read,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(
+  List<Widget> _buildContentSlivers(
     BuildContext context, {
     required bool isDark,
     required bool isLoading,
@@ -91,48 +95,71 @@ class SharedNotificationsView extends StatelessWidget {
   }) {
     final hasItems = unread.isNotEmpty || read.isNotEmpty;
     if (isLoading && !hasItems) {
-      return const AppLoadingIndicator(message: 'Loading notifications…');
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppLoadingIndicator(message: 'Loading notifications…'),
+        ),
+      ];
     }
     if (errorMessage != null && !hasItems) {
-      return AppErrorWidget(message: errorMessage, onRetry: onRetry);
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppErrorWidget(message: errorMessage, onRetry: onRetry),
+        ),
+      ];
     }
     if (!hasItems) {
-      return const AppEmptyState(
-        icon: Icons.notifications_none_rounded,
-        title: 'No Notifications',
-        description: 'You are all caught up on report updates and alerts.',
-      );
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: AppEmptyState(
+            icon: Icons.notifications_none_rounded,
+            title: 'No Notifications',
+            description: 'You are all caught up on report updates and alerts.',
+          ),
+        ),
+      ];
     }
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      children: [
-        if (errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Showing saved notifications. $errorMessage',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.statusDisputed,
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        sliver: SliverList(
+          delegate: SliverChildListDelegate([
+            if (errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Showing saved notifications. $errorMessage',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.statusDisputed,
+                  ),
+                ),
               ),
-            ),
-          ),
-        if (unread.isNotEmpty) ...[
-          _SectionHeader(title: 'New', count: unread.length, isDark: isDark),
-          const SizedBox(height: 10),
-          for (final notification in unread)
-            _NotificationTile(notification: notification, isDark: isDark),
-          const SizedBox(height: 6),
-        ],
-        if (read.isNotEmpty) ...[
-          _SectionHeader(title: 'Earlier', isDark: isDark),
-          const SizedBox(height: 10),
-          for (final notification in read)
-            _NotificationTile(notification: notification, isDark: isDark),
-        ],
-      ],
-    );
+            if (unread.isNotEmpty) ...[
+              _SectionHeader(
+                title: 'New',
+                count: unread.length,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 10),
+              for (final notification in unread)
+                _NotificationTile(notification: notification, isDark: isDark),
+              const SizedBox(height: 6),
+            ],
+            if (read.isNotEmpty) ...[
+              _SectionHeader(title: 'Earlier', isDark: isDark),
+              const SizedBox(height: 10),
+              for (final notification in read)
+                _NotificationTile(notification: notification, isDark: isDark),
+            ],
+          ]),
+        ),
+      ),
+    ];
   }
 }
 

@@ -51,6 +51,12 @@ class InMemoryNotificationGateway implements NotificationGateway {
     _emitActivity(event.reportId);
   }
 
+  /// Makes the live stream for [uid] report an error after it already
+  /// delivered data (e.g. the connection was lost).
+  void failStream(String uid, Object error) {
+    _userStreams[uid]?.addError(error);
+  }
+
   List<NotificationItem> snapshotFor(String uid) =>
       List.unmodifiable(_byUser[uid] ?? const []);
 

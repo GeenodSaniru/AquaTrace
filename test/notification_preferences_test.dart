@@ -34,6 +34,7 @@ class _Choices {
 }
 
 void main() {
+  fcmPermissionEdgeTests();
   group('NotificationPreferences', () {
     test('serialises exactly the fields the rules accept', () {
       expect(
@@ -299,5 +300,70 @@ void main() {
         expect(shown, hasLength(2));
       },
     );
+  });
+}
+
+void fcmPermissionEdgeTests() {
+  group('Permission revoked / re-granted while signed in', () {
+    late FakePushClient client;
+    late FakeTokenStore tokens;
+    late PushMessagingService service;
+
+    setUp(() async {
+      client = FakePushClient(permission: PushPermissionStatus.granted);
+      tokens = FakeTokenStore();
+      service = PushMessagingService(client: client, tokenStore: tokens);
+      await service.initialize();
+      await service.bindUser('u1');
+    });
+
+    tearDown(() => service.dispose());
+
+    test('revoking permission removes this device from the account', () async {
+      expect(tokens.tokensOf('u1'), {'token-1'});
+      client.permission =
+          PushPermissionStatus.denied; // user turned it off in settings
+      await service.refreshStatus();
+      expect(service.status, PushPermissionStatus.denied);
+      expect(service.isRegistered, isFalse);
+      expect(tokens.tokensOf('u1'), isEmpty);
+      expect(client.deleteTokenCalls, 1);
+    });
+
+    test('re-granting registers a fresh token', () async {
+      client.permission = PushPermissionStatus.denied;
+      await service.refreshStatus();
+      client.permission = PushPermissionStatus.granted;
+      client.token = 'token-2';
+      await service.refreshStatus();
+      expect(service.isRegistered, isTrue);
+      expect(tokens.tokensOf('u1'), {'token-2'});
+    });
+
+    test('refreshing while still denied does nothing more', () async {
+      client.permission = PushPermissionStatus.denied;
+      await service.refreshStatus();
+      await service.refreshStatus();
+      expect(client.deleteTokenCalls, 1);
+    });
+
+    test('a token refresh after revocation is ignored', () async {
+      client.permission = PushPermissionStatus.denied;
+      await service.refreshStatus();
+      client.refresh.add('late-token');
+      await settle();
+      expect(tokens.tokensOf('u1'), isEmpty);
+    });
+
+    test('permission never granted: nothing to clean up', () async {
+      final fresh = FakePushClient();
+      final service2 = PushMessagingService(client: fresh, tokenStore: tokens);
+      await service2.initialize();
+      await service2.bindUser('u2');
+      fresh.permission = PushPermissionStatus.denied;
+      await service2.refreshStatus();
+      expect(fresh.deleteTokenCalls, 0);
+      service2.dispose();
+    });
   });
 }

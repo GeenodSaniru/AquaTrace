@@ -428,6 +428,16 @@ class PushMessagingService extends ChangeNotifier {
     final uid = _uid;
     if (uid != null && _status == PushPermissionStatus.granted) {
       await _registerToken(uid);
+    } else if (uid != null &&
+        _token != null &&
+        _status == PushPermissionStatus.denied) {
+      // Permission was revoked in system settings while signed in: this device
+      // can no longer show pushes, so stop advertising it to the backend. A
+      // later re-grant registers a fresh token (see above).
+      final stale = _token!;
+      _token = null;
+      _notify();
+      await _discard(uid, stale);
     }
   }
 
