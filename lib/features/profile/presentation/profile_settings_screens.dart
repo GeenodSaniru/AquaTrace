@@ -63,12 +63,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _showMessage('Choose an image smaller than 5 MB.');
         return;
       }
+<<<<<<< Updated upstream
       if (!ProfilePhotoService.supportsContentType(
         (image.mimeType ?? 'image/jpeg').toLowerCase(),
       )) {
         _showMessage('Choose a JPEG, PNG, WebP, or HEIC image.');
         return;
       }
+=======
+>>>>>>> Stashed changes
 
       setState(() {
         _selectedImage = image;
@@ -128,6 +131,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String _friendlyError(Object error) {
     final message = error.toString();
+<<<<<<< Updated upstream
     if (message.contains('permission-denied') ||
         message.contains('unauthorized')) {
       return 'Profile photo upload was denied. Storage access is not enabled for this account.';
@@ -135,6 +139,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (message.contains('unavailable') ||
         message.contains('network') ||
         message.contains('retry-limit-exceeded')) {
+=======
+    if (message.contains('permission-denied')) {
+      return 'Profile photo upload was denied. Storage access is not enabled for this account.';
+    }
+    if (message.contains('unavailable') || message.contains('network')) {
+>>>>>>> Stashed changes
       return 'Could not connect. Check your connection and try again.';
     }
     return message.replaceFirst('Bad state: ', '');

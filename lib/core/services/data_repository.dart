@@ -57,13 +57,22 @@ class DataRepository with ChangeNotifier {
   }
 
   void _initialize() {
-    if (!FirebaseService.isRealFirebase) {
-      _reports.addAll(MockData.initialReports);
+    // Always seed demo Colombo reports so map/demo role access works even when
+    // Firebase is configured. Live Auth snapshots replace this dataset.
+    _seedDemoDataset();
+  }
+
+  void _seedDemoDataset() {
+    _reports
+      ..clear()
+      ..addAll(MockData.initialReports);
+    if (_notifications.isEmpty) {
       _notifications.addAll(MockData.initialNotifications);
-      _reportTimelines['AT-2026-00124'] = List.from(
-        MockData.activityTimelineFor124,
-      );
     }
+    _reportTimelines.putIfAbsent(
+      'AT-2026-00124',
+      () => List.from(MockData.activityTimelineFor124),
+    );
   }
 
   // --- Reports Query & Management ---
@@ -186,7 +195,8 @@ class DataRepository with ChangeNotifier {
     _reportsSubscription?.cancel();
     _reportsErrorMessage = null;
     if (user == null) {
-      _reports.clear();
+      // No Firebase Auth session (includes demo-role sign-in) — keep mock faults.
+      _seedDemoDataset();
       _reportsLoading = false;
       notifyListeners();
       return;
