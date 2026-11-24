@@ -23,11 +23,8 @@ class SharedProfileView extends StatelessWidget {
     final preferences = context.watch<PreferencesService>();
     final user = auth.currentUser;
     final role = user?.role ?? UserRole.citizen;
-<<<<<<< Updated upstream
     final displayName = user?.displayName.trim() ?? '';
     final assignedArea = user?.assignedArea.trim() ?? '';
-=======
->>>>>>> Stashed changes
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -56,13 +53,7 @@ class SharedProfileView extends StatelessWidget {
                 _ProfileAvatar(user: user, role: role, isDark: isDark),
                 const SizedBox(height: 12),
                 Text(
-<<<<<<< Updated upstream
                   displayName.isNotEmpty ? displayName : 'AquaTrace User',
-=======
-                  user?.displayName.isNotEmpty == true
-                      ? user!.displayName
-                      : 'AquaTrace User',
->>>>>>> Stashed changes
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -95,15 +86,9 @@ class SharedProfileView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-<<<<<<< Updated upstream
                 if (assignedArea.isNotEmpty)
                   Text(
                     assignedArea,
-=======
-                if (user?.assignedArea.isNotEmpty == true)
-                  Text(
-                    user!.assignedArea,
->>>>>>> Stashed changes
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
               ],
