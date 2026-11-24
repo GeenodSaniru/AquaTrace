@@ -1,0 +1,174 @@
+AquaTrace — Remaining tasks & bug fixes
+=======================================
+Updated: 2026-11-24
+Branch baseline: geenod (analyzer clean after f4261b6)
+Status: Members 1–8 feature code is largely complete. Left work is mostly
+        deploy, live QA, small polish, and optional product gaps.
+
+
+------------------------------------------------------------------------------
+A. BUGS / CODE FIXES
+------------------------------------------------------------------------------
+
+[ ] A1. Admin dashboard ListTile debug assert (Member 5)
+    - File: lib/features/admin/presentation/admin_dashboard_view.dart
+    - Issue: ListTile inside coloured DecoratedBox triggers Flutter debug
+      assertion about invisible ink / background.
+    - Fix: Restyle quick-action tiles so ink/splash is visible, or avoid
+      ListTile inside solid coloured boxes.
+
+[ ] A2. Review Bugbot findings on PR #18 (7 potential issues)
+    - URL: https://github.com/GeenodSaniru/AquaTrace/pull/18
+    - Action: Open PR checks / Bugbot review, triage each finding, fix real
+      bugs before merging test → main.
+
+[ ] A3. Cloud Functions Firestore glue never run live
+    - File: functions/index.js (deliveryStore / countVerification /
+      countDispute transactions ~25 lines of Firestore-backed glue)
+    - Action: Emulator or staging deploy + run functions/README.md plan.
+
+
+------------------------------------------------------------------------------
+B. FIREBASE / DEPLOY (HIGH PRIORITY)
+------------------------------------------------------------------------------
+
+[ ] B1. Deploy Cloud Functions to aquatrace-92e2e
+    - Requires: Blaze plan, region matching Firestore
+    - Commands (from functions/README.md):
+        cd functions && npm install
+        firebase deploy --only functions --project aquatrace-92e2e
+
+[ ] B2. Deploy latest firestore.rules (with functions)
+    - Includes: notification create denied for clients, fcmTokens rules,
+      verification/dispute docs, settings/notifications, narrowed activity read
+    - Command: firebase deploy --only firestore:rules --project aquatrace-92e2e
+    - Also: Rules Playground / emulator pass
+
+[ ] B3. Enable Firebase Storage + deploy storage.rules
+    - Live E2E uploads for: report evidence, profile avatar, repair photos
+    - Command: firebase deploy --only storage --project aquatrace-92e2e
+
+[ ] B4. Run functions verification plan
+    - Source: functions/README.md
+    - Emulator or staging project; confirm event → notification → push path
+
+[ ] B5. iOS / macOS push setup
+    - APNs auth key in Firebase Console
+    - Push Notifications capability / aps-environment entitlement
+    - Apple Developer team required
+
+[ ] B6. Optional web push
+    - Service worker + VAPID key (not configured)
+
+[ ] B7. Physical-device FCM QA
+    - Permission grant/deny
+    - Token register / refresh / remove
+    - Foreground / background / terminated notification rendering + taps
+    - Cold-start deep links
+
+[ ] B8. Live role E2E (real Auth accounts, not demo-only)
+    - Citizen: submit report + evidence upload
+    - Admin: approve / assign / activity history
+    - Technician: start / complete + after-repair photo
+    - Citizen: community verify / dispute (Member 7)
+    - Notifications appear for correct recipients (Member 8)
+
+
+------------------------------------------------------------------------------
+C. PRODUCT / FEATURE GAPS
+------------------------------------------------------------------------------
+
+[ ] C1. Google Sign-In
+    - Currently stub SnackBar on login screen
+    - Needs: Firebase Google provider, OAuth client IDs, google_sign_in package
+
+[ ] C2. Apple Sign-In
+    - Currently stub SnackBar on login screen
+    - Needs: Apple Developer Team, Sign in with Apple, Firebase Apple provider,
+      sign_in_with_apple package
+
+[ ] C3. Nearby faults by GPS (optional)
+    - Today: same service-area matching from profile
+    - Desired: real GPS proximity for “nearby” alerts / verify eligibility UX
+
+[ ] C4. Weekly email digest
+    - Preference toggle exists; not connected to any mail backend
+
+[ ] C5. Usage analytics
+    - Preference / privacy copy only; not wired to Analytics product
+
+[ ] C6. Data export
+    - Mentioned in settings/privacy as unavailable; not implemented
+
+[ ] C7. Release Android API-key SHA-1
+    - Member 1 hardening applied debug SHA-1 only
+    - Add release keystore SHA-1 to Android API key restrictions
+
+[ ] C8. Optional FCM API migration
+    - Newer FCM register() API alongside backend (noted in Member 8 handoff)
+
+
+------------------------------------------------------------------------------
+D. GIT / PROCESS
+------------------------------------------------------------------------------
+
+[ ] D1. Merge PR #18 (test → main) after Bugbot triage
+    - main is ~29 commits behind geenod/test work
+    - URL: https://github.com/GeenodSaniru/AquaTrace/pull/18
+
+[ ] D2. Sync main with geenod after PR merge (if needed)
+    - Confirm main, test, and geenod tips align for the team
+
+[ ] D3. GitHub Secret Scanning (client AIza keys)
+    - Expected FlutterFire / Google Maps-style client keys
+    - Action: dismiss as false positive if desired; keep API key restrictions
+
+[ ] D4. Re-run full test suites after next large merge
+    - flutter test  (was 249/249 on Member 8 handoff tree)
+    - cd functions && npm test  (was 61/61)
+
+
+------------------------------------------------------------------------------
+E. ENVIRONMENT / DEVICE QA (NOT CODE DEFECTS)
+------------------------------------------------------------------------------
+
+[ ] E1. Android emulator on this Mac
+    - Needs more free RAM (~1.5–2 GB); AVD Medium_Phone dies under memory pressure
+
+[ ] E2. Physical camera / gallery permission denial paths
+    - Covered by tests with fakes; verify on real device
+
+[ ] E3. Physical GPS permission grant/deny + map current-location
+    - Verify on device / emulator with Play services
+
+[ ] E4. macOS desktop Flutter run
+    - Previously failed on Swift Package Manager / Xcode linker for Firebase
+
+
+------------------------------------------------------------------------------
+F. ALREADY DONE (do not re-open unless regressions)
+------------------------------------------------------------------------------
+
+[x] Profile conflict markers removed (shared_profile_view / profile_settings)
+[x] DataRepository restored (notifications + verification APIs)
+[x] NotificationType / timeline helpers restored
+[x] Unsafe uncommitted firestore.rules regression reverted
+[x] Destructive GitHub Desktop stashes dropped
+[x] Critical fix pushed: f4261b6 on geenod
+[x] flutter analyze — no issues (as of 2026-11-24)
+
+
+------------------------------------------------------------------------------
+SUGGESTED ORDER
+------------------------------------------------------------------------------
+
+1. B1–B3  Deploy functions, Firestore rules, Storage
+2. A2     Triage Bugbot on PR #18
+3. D1     Merge PR #18 → main
+4. B7–B8  Live device / role E2E
+5. A1     Admin ListTile polish
+6. C1–C2  OAuth if required for release
+7. C3–C8  Optional product polish
+
+
+End of list.
