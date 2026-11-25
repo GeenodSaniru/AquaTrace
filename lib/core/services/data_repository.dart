@@ -1096,62 +1096,64 @@ class DataRepository with ChangeNotifier {
         newVerificationCount: newCount,
       );
 
-      // Update in-memory state
+      // Always remember this device's vote so duplicate submits are blocked.
       _reportVerifications.putIfAbsent(report.reportId, () => []).add(vote);
-      _reports[index] = currentReport.copyWith(
-        verificationCount: newCount,
-        updatedAt: DateTime.now(),
-      );
 
-      _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
-
-      // If threshold reached, add milestone activity and notify workflows (Member 8 coordination)
-      if (newCount >= CommunityVerificationService.confirmationThreshold &&
-          currentReport.verificationCount <
-              CommunityVerificationService.confirmationThreshold) {
-        _addTimelineEvent(
-          reportId: report.reportId,
-          title: 'Community Verified',
-          description:
-              '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
-          actorName: 'Community',
-          actorRole: 'Citizen Verification',
-          status: FaultStatus.completed,
+      // Live Firebase: counters, activity, and notifications come from Cloud
+      // Functions + report snapshots — do not invent them locally.
+      // Demo mode has no backend, so it applies the optimistic mirror here.
+      if (!FirebaseService.isRealFirebase) {
+        _reports[index] = currentReport.copyWith(
+          verificationCount: newCount,
+          updatedAt: DateTime.now(),
         );
 
-        // Notifications for this milestone are created by the backend in
-        // production (functions/ `onVerificationCreated`). Demo mode has no
-        // backend, so it plays that role here.
-        _demoNotify(
-          recipientUid: currentReport.reporterUid,
-          title: 'Repair Verified',
-          body:
-              'Community confirmed resolution for your report ${report.reportId}.',
-          reportId: report.reportId,
-          type: NotificationType.verification,
-        );
-        final technicianUid = currentReport.assignedTechnicianUid;
-        if (technicianUid != null) {
+        _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+        if (newCount >= CommunityVerificationService.confirmationThreshold &&
+            currentReport.verificationCount <
+                CommunityVerificationService.confirmationThreshold) {
+          _addTimelineEvent(
+            reportId: report.reportId,
+            title: 'Community Verified',
+            description:
+                '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
+            actorName: 'Community',
+            actorRole: 'Citizen Verification',
+            status: FaultStatus.completed,
+          );
+
           _demoNotify(
-            recipientUid: technicianUid,
+            recipientUid: currentReport.reporterUid,
+            title: 'Repair Verified',
+            body:
+                'Community confirmed resolution for your report ${report.reportId}.',
+            reportId: report.reportId,
+            type: NotificationType.verification,
+          );
+          final technicianUid = currentReport.assignedTechnicianUid;
+          if (technicianUid != null) {
+            _demoNotify(
+              recipientUid: technicianUid,
+              title: 'Repair Verified by Community',
+              body:
+                  '${CommunityVerificationService.confirmationThreshold} nearby '
+                  'citizens confirmed your repair on ${report.reportId} is '
+                  'complete.',
+              reportId: report.reportId,
+              type: NotificationType.verification,
+            );
+          }
+          _demoNotify(
+            recipientUid: MockData.adminUser.uid,
             title: 'Repair Verified by Community',
             body:
-                '${CommunityVerificationService.confirmationThreshold} nearby '
-                'citizens confirmed your repair on ${report.reportId} is '
-                'complete.',
+                'Report ${report.reportId} reached the community verification '
+                'threshold.',
             reportId: report.reportId,
             type: NotificationType.verification,
           );
         }
-        _demoNotify(
-          recipientUid: MockData.adminUser.uid,
-          title: 'Repair Verified by Community',
-          body:
-              'Report ${report.reportId} reached the community verification '
-              'threshold.',
-          reportId: report.reportId,
-          type: NotificationType.verification,
-        );
       }
 
       notifyListeners();
@@ -1258,61 +1260,63 @@ class DataRepository with ChangeNotifier {
         newDisputeCount: newDisputeCount,
       );
 
-      // Update in-memory state: auto-reopens report to disputed
       _reportDisputes.putIfAbsent(report.reportId, () => []).add(dispute);
-      _reports[index] = currentReport.copyWith(
-        status: FaultStatus.disputed,
-        disputeCount: newDisputeCount,
-        updatedAt: DateTime.now(),
-      );
 
-      _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+      // Live Firebase: status flip, counters, activity, and notifications are
+      // owned by Cloud Functions. Demo mode mirrors that locally.
+      if (!FirebaseService.isRealFirebase) {
+        _reports[index] = currentReport.copyWith(
+          status: FaultStatus.disputed,
+          disputeCount: newDisputeCount,
+          updatedAt: DateTime.now(),
+        );
 
-      // Notifications for a dispute are created by the backend in production
-      // (functions/ `onDisputeCreated`). Demo mode has no backend, so it plays
-      // that role here, addressing each message to the right recipient.
-      _demoNotify(
-        recipientUid: MockData.adminUser.uid,
-        title: 'Dispute Raised',
-        body:
-            'Dispute raised on ${report.reportId} by ${voter.displayName}. '
-            'Case reopened for Admin review.',
-        reportId: report.reportId,
-        type: NotificationType.dispute,
-      );
-      final technicianUid = currentReport.assignedTechnicianUid;
-      if (technicianUid != null) {
+        _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+        // Notifications for a dispute — demo backend only.
         _demoNotify(
-          recipientUid: technicianUid,
-          title: 'Repair Disputed',
+          recipientUid: MockData.adminUser.uid,
+          title: 'Dispute Raised',
           body:
-              'Completed repair on ${report.reportId} was disputed by the '
-              'community and reopened for review.',
+              'Dispute raised on ${report.reportId} by ${voter.displayName}. '
+              'Case reopened for Admin review.',
+          reportId: report.reportId,
+          type: NotificationType.dispute,
+        );
+        final technicianUid = currentReport.assignedTechnicianUid;
+        if (technicianUid != null) {
+          _demoNotify(
+            recipientUid: technicianUid,
+            title: 'Repair Disputed',
+            body:
+                'Completed repair on ${report.reportId} was disputed by the '
+                'community and reopened for review.',
+            reportId: report.reportId,
+            type: NotificationType.dispute,
+          );
+        }
+        if (currentReport.reporterUid.isNotEmpty &&
+            currentReport.reporterUid != voter.uid) {
+          _demoNotify(
+            recipientUid: currentReport.reporterUid,
+            title: 'Dispute Opened',
+            body:
+                'A community dispute has been raised on your report '
+                '${report.reportId}. Admin is reviewing.',
+            reportId: report.reportId,
+            type: NotificationType.dispute,
+          );
+        }
+        _demoNotify(
+          recipientUid: voter.uid,
+          title: 'Dispute Submitted',
+          body:
+              'Your dispute on ${report.reportId} was submitted to the Water '
+              'Board.',
           reportId: report.reportId,
           type: NotificationType.dispute,
         );
       }
-      if (currentReport.reporterUid.isNotEmpty &&
-          currentReport.reporterUid != voter.uid) {
-        _demoNotify(
-          recipientUid: currentReport.reporterUid,
-          title: 'Dispute Opened',
-          body:
-              'A community dispute has been raised on your report '
-              '${report.reportId}. Admin is reviewing.',
-          reportId: report.reportId,
-          type: NotificationType.dispute,
-        );
-      }
-      _demoNotify(
-        recipientUid: voter.uid,
-        title: 'Dispute Submitted',
-        body:
-            'Your dispute on ${report.reportId} was submitted to the Water '
-            'Board.',
-        reportId: report.reportId,
-        type: NotificationType.dispute,
-      );
 
       notifyListeners();
     } finally {

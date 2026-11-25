@@ -434,12 +434,28 @@ service cloud.firestore {
       // Counters / status flips must be applied by Cloud Functions (Admin SDK).
       // ------------------------------------------------------------------------
       match /verifications/{voterUid} {
-        allow read: if isSignedIn();
+        // Own vote, report owner, assigned technician, or admin.
+        allow read: if isAdmin()
+          || isAssignedTechnician(reportDoc(reportId).data)
+          || (
+            isSignedIn()
+            && (
+              voterUid == request.auth.uid
+              || reportDoc(reportId).data.reporterUid == request.auth.uid
+            )
+          );
 
         allow create: if isCitizen()
           && voterUid == request.auth.uid
           && reportExists(reportId)
           && reportDoc(reportId).data.status == 'completed'
+          // Reporter and assigned technician cannot audit their own repair.
+          && reportDoc(reportId).data.reporterUid != request.auth.uid
+          && (
+            !('assignedTechnicianUid' in reportDoc(reportId).data)
+            || reportDoc(reportId).data.assignedTechnicianUid == null
+            || reportDoc(reportId).data.assignedTechnicianUid != request.auth.uid
+          )
           && request.resource.data.keys().hasOnly([
             'voterUid',
             'voterName',
@@ -464,12 +480,26 @@ service cloud.firestore {
       // onDisputeCreated Cloud Function (Admin SDK), never by clients.
       // ------------------------------------------------------------------------
       match /disputes/{voterUid} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin()
+          || isAssignedTechnician(reportDoc(reportId).data)
+          || (
+            isSignedIn()
+            && (
+              voterUid == request.auth.uid
+              || reportDoc(reportId).data.reporterUid == request.auth.uid
+            )
+          );
 
         allow create: if isCitizen()
           && voterUid == request.auth.uid
           && reportExists(reportId)
           && reportDoc(reportId).data.status in ['completed', 'disputed']
+          && reportDoc(reportId).data.reporterUid != request.auth.uid
+          && (
+            !('assignedTechnicianUid' in reportDoc(reportId).data)
+            || reportDoc(reportId).data.assignedTechnicianUid == null
+            || reportDoc(reportId).data.assignedTechnicianUid != request.auth.uid
+          )
           && request.resource.data.keys().hasOnly([
             'voterUid',
             'voterName',
@@ -488,7 +518,8 @@ service cloud.firestore {
           && (!('evidenceImageUrl' in request.resource.data)
               || request.resource.data.evidenceImageUrl is string);
 
-        allow update, delete: if isAdmin();
+        // Immutable from clients; Admin SDK / Cloud Functions may still mutate.
+        allow update, delete: if false;
       }
     }
 

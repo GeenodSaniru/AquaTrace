@@ -1,5 +1,27 @@
 # AquaTrace — Update Log
 
+## 2026-11-25 20:01:56 +0530 (Asia/Colombo, UTC+05:30) — Remaining bug fixes (rules, GPS, AppCard, optimistic sync)
+
+### Completed
+- Fixed admin quick-action ListTile ink assert by making `AppCard` a Material surface.
+- Verification/dispute UI no longer invents Colombo fallback GPS coordinates when location fails (fail closed).
+- Hardened `firestore.rules` for verifications/disputes: block reporter & assigned technician creates, narrow reads, make dispute docs client-immutable.
+- Live Firebase path no longer optimistically invents verification/dispute counters, status flips, or demo notifications (Cloud Functions own those); demo mode unchanged.
+- Deployed updated `firestore.rules` to `aquatrace-92e2e`.
+- Updated `REMAINING_TASKS.txt` checklist.
+
+### Checks
+| Command | Result |
+|---------|--------|
+| `flutter analyze` (touched paths) | Pass — no issues found |
+| `flutter test test/community_verification_test.dart test/admin_workflow_test.dart` | Pass — all tests passed |
+| `firebase deploy --only firestore:rules` | Pass — released to aquatrace-92e2e |
+
+### Still blocked / out of scope this pass
+- Firebase Storage not enabled in Console (storage deploy failed).
+- Cloud Functions deploy not completed (Blaze / explicit deploy).
+- OAuth, physical FCM/device E2E, PR #18 merge remain open in `REMAINING_TASKS.txt`.
+
 ## 2026-11-22 19:21:13 +05:30 (Asia/Colombo, UTC+05:30) — Member 8 Prompt 8C, Part 4/4: FINAL STATUS — Member 8 (notifications, push, report history)
 
 Branch `feature/notifications-history`. Closes Prompt 8C and the Member 8 scope (8A + 8B + 8C). Parts 1–3 of 8C are the entries below.

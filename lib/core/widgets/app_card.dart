@@ -32,24 +32,21 @@ class AppCard extends StatelessWidget {
     final effectiveBorder =
         borderColor ?? (isDark ? AppColors.darkBorder : AppColors.lightBorder);
 
-    final card = Container(
-      margin: margin,
-      decoration: BoxDecoration(
-        color: effectiveBg,
+    // Use Material (not a bare DecoratedBox/Container) so ListTile /
+    // InkWell descendants have a Material ancestor for visible ink splashes.
+    final card = Material(
+      color: effectiveBg,
+      elevation: isDark ? 0 : 1,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: effectiveBorder, width: 1.0),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+        side: BorderSide(color: effectiveBorder, width: 1.0),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     );
+
+    final wrapped = Padding(padding: margin, child: card);
 
     if (onTap != null) {
       return Material(
@@ -57,11 +54,11 @@ class AppCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(borderRadius),
-          child: card,
+          child: wrapped,
         ),
       );
     }
 
-    return card;
+    return wrapped;
   }
 }
