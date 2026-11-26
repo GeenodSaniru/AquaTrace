@@ -7,10 +7,20 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../constants/fault_constants.dart';
 import '../errors/app_exception.dart';
+import '../../features/notifications/services/backend_session.dart';
+import '../../features/notifications/services/demo_notifications.dart';
+import '../../features/notifications/services/in_memory_notification_gateway.dart';
+import '../../features/notifications/services/notification_gateway.dart';
+import '../../features/notifications/services/notification_store.dart';
 import '../models/activity_timeline_event.dart';
+import '../models/dispute_record_model.dart';
 import '../models/mock_data.dart';
 import '../models/notification_item.dart';
 import '../models/report_model.dart';
+import '../models/user_model.dart';
+import '../models/verification_vote_model.dart';
+import '../../features/verification/services/community_verification_service.dart';
+import 'community_verification_gateway.dart';
 import 'firebase_service.dart';
 import 'report_submission_gateway.dart';
 import 'technician_job_gateway.dart';
@@ -22,9 +32,14 @@ import 'technician_job_gateway.dart';
 class DataRepository with ChangeNotifier {
   final ReportSubmissionGateway _reportSubmissionGateway;
   final TechnicianJobGateway _technicianJobGateway;
+  final CommunityVerificationGateway _communityVerificationGateway;
+  final NotificationGateway _notificationGateway;
+  late final NotificationStore _notificationStore;
   final List<ReportModel> _reports = [];
-  final List<NotificationItem> _notifications = [];
   final Map<String, List<ActivityTimelineEvent>> _reportTimelines = {};
+  static int _activitySequence = 0;
+  final Map<String, List<VerificationVoteModel>> _reportVerifications = {};
+  final Map<String, List<DisputeRecordModel>> _reportDisputes = {};
   final Set<String> _submissionsInFlight = {};
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reportsSubscription;
@@ -32,7 +47,7 @@ class DataRepository with ChangeNotifier {
   String? _reportsErrorMessage;
 
   List<ReportModel> get reports => List.unmodifiable(_reports);
-  List<NotificationItem> get notifications => List.unmodifiable(_notifications);
+  List<NotificationItem> get notifications => _notificationStore.items;
   bool get isReportsLoading => _reportsLoading;
   String? get reportsError => _reportsErrorMessage;
   bool get reportsLoading => _reportsLoading;
@@ -42,10 +57,22 @@ class DataRepository with ChangeNotifier {
     ReportSubmissionGateway? reportSubmissionGateway,
     @visibleForTesting List<ReportModel>? initialReports,
     TechnicianJobGateway? technicianJobGateway,
+    CommunityVerificationGateway? communityVerificationGateway,
+    NotificationGateway? notificationGateway,
   }) : _reportSubmissionGateway =
            reportSubmissionGateway ?? FirebaseReportSubmissionGateway(),
        _technicianJobGateway =
-           technicianJobGateway ?? FirebaseTechnicianJobGateway() {
+           technicianJobGateway ?? FirebaseTechnicianJobGateway(),
+       _communityVerificationGateway =
+           communityVerificationGateway ??
+           FirebaseCommunityVerificationGateway(),
+       _notificationGateway =
+           notificationGateway ??
+           (FirebaseService.isRealFirebase
+               ? FirebaseNotificationGateway()
+               : InMemoryNotificationGateway(seed: DemoNotifications.build())) {
+    _notificationStore = NotificationStore(gateway: _notificationGateway)
+      ..addListener(notifyListeners);
     if (initialReports != null) {
       _reports.addAll(initialReports);
     } else {
@@ -59,10 +86,41 @@ class DataRepository with ChangeNotifier {
   void _initialize() {
     if (!FirebaseService.isRealFirebase) {
       _reports.addAll(MockData.initialReports);
-      _notifications.addAll(MockData.initialNotifications);
       _reportTimelines['AT-2026-00124'] = List.from(
         MockData.activityTimelineFor124,
       );
+      _reportVerifications['AT-2026-00126'] = [
+        VerificationVoteModel(
+          voterUid: 'citizen-sarath-010',
+          voterName: 'Sarath Gunawardena',
+          reportId: 'AT-2026-00126',
+          createdAt: DateTime(2026, 9, 24, 12, 0),
+          note: 'Roadway is clear and leak is stopped.',
+        ),
+        VerificationVoteModel(
+          voterUid: 'citizen-anula-011',
+          voterName: 'Anula Weerasinghe',
+          reportId: 'AT-2026-00126',
+          createdAt: DateTime(2026, 9, 24, 12, 30),
+          note: 'Confirmed dry pavement.',
+        ),
+      ];
+      _reportDisputes['AT-2026-00127'] = [
+        DisputeRecordModel(
+          voterUid: 'citizen-priyantha-012',
+          voterName: 'Priyantha Alwis',
+          reportId: 'AT-2026-00127',
+          reason: 'Water continues to pool along pavement curb.',
+          createdAt: DateTime(2026, 9, 23, 10, 15),
+        ),
+        DisputeRecordModel(
+          voterUid: 'citizen-chandani-013',
+          voterName: 'Chandani Silva',
+          reportId: 'AT-2026-00127',
+          reason: 'Repair asphalt collapsed; leak still active.',
+          createdAt: DateTime(2026, 9, 23, 14, 45),
+        ),
+      ];
     }
   }
 
@@ -73,8 +131,12 @@ class DataRepository with ChangeNotifier {
   }
 
   List<ReportModel> getReportsForTechnician(String technicianUid) {
+    final normalizedUid = technicianUid.trim();
+    if (normalizedUid.isEmpty) {
+      return const [];
+    }
     return _reports
-        .where((r) => r.assignedTechnicianUid == technicianUid)
+        .where((r) => r.assignedTechnicianUid?.trim() == normalizedUid)
         .toList();
   }
 
@@ -170,6 +232,7 @@ class DataRepository with ChangeNotifier {
         actorRole: 'Citizen',
         status: FaultStatus.pending,
       );
+      _demoNotifyNewReport(savedReport);
       notifyListeners();
     } finally {
       _submissionsInFlight.remove(report.reportId);
@@ -278,6 +341,9 @@ class DataRepository with ChangeNotifier {
   void dispose() {
     _authSubscription?.cancel();
     _reportsSubscription?.cancel();
+    _notificationStore
+      ..removeListener(notifyListeners)
+      ..dispose();
     super.dispose();
   }
 
@@ -328,6 +394,9 @@ class DataRepository with ChangeNotifier {
     required FaultStatus newStatus,
     String? note,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -357,12 +426,10 @@ class DataRepository with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      id: _newActivityId(),
       reportId: reportId,
-      title: 'Job ${newStatus.displayName}',
-      description:
-          note ??
-          'Job status changed to ${newStatus.displayName} by $actorName.',
+      title: _repairEventTitle(newStatus),
+      description: note ?? _repairEventDescription(newStatus, actorName),
       actorName: actorName,
       actorRole: 'Technician',
       status: newStatus,
@@ -377,8 +444,25 @@ class DataRepository with ChangeNotifier {
     }
     _reports[index] = updated;
     _reportTimelines.putIfAbsent(reportId, () => []).add(activity);
+    _demoNotifyRepairStatus(before: current, after: updated);
     notifyListeners();
   }
+
+  /// Audit-trail title for a technician's status change (matches the design:
+  /// "Repair Started" / "Repair Completed").
+  static String _repairEventTitle(FaultStatus status) => switch (status) {
+    FaultStatus.ongoing => 'Repair Started',
+    FaultStatus.completed => 'Repair Completed',
+    _ => 'Job ${status.displayName}',
+  };
+
+  static String _repairEventDescription(FaultStatus status, String actorName) =>
+      switch (status) {
+        FaultStatus.ongoing => 'Technician started repair work.',
+        FaultStatus.completed =>
+          'Repair marked completed. After-repair photos uploaded.',
+        _ => 'Job status changed to ${status.displayName} by $actorName.',
+      };
 
   Future<void> uploadTechnicianAfterRepairPhoto({
     required String reportId,
@@ -386,6 +470,9 @@ class DataRepository with ChangeNotifier {
     required Uint8List bytes,
     required String contentType,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -437,6 +524,9 @@ class DataRepository with ChangeNotifier {
     required String actorName,
     required String notes,
   }) async {
+    if (technicianUid.trim().isEmpty) {
+      throw const PermissionException('Technician identity is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) {
       throw const ValidationException('The assigned job could not be found.');
@@ -464,7 +554,7 @@ class DataRepository with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     final activity = ActivityTimelineEvent(
-      id: 'act-${DateTime.now().microsecondsSinceEpoch}',
+      id: _newActivityId(),
       reportId: reportId,
       title: 'Repair Notes Updated',
       description: 'Repair notes updated by $actorName.',
@@ -494,8 +584,17 @@ class DataRepository with ChangeNotifier {
     required String technicianUid,
     required String technicianName,
     required String adminName,
+    required String actorRole,
   }) async {
-    await _requireAuthorizedActor('Admin');
+    await _requireAuthorizedActor(actorRole);
+    if (actorRole.trim().toLowerCase() != 'admin') {
+      throw const PermissionException('Administrator access is required.');
+    }
+    if (technicianUid.trim().isEmpty || technicianName.trim().isEmpty) {
+      throw const ValidationException(
+        'A technician identity is required for assignment.',
+      );
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index != -1) {
       final report = _reports[index];
@@ -521,6 +620,19 @@ class DataRepository with ChangeNotifier {
         updatedAt: updatedAt,
       );
 
+      // Approving a pending report is the "admin verified" step of the
+      // lifecycle; re-assigning a disputed one is not a fresh verification.
+      if (report.status == FaultStatus.pending) {
+        _addTimelineEvent(
+          reportId: reportId,
+          title: 'Report Verified',
+          description:
+              'Admin verified and approved the report. Priority set to ${report.severity.displayName}.',
+          actorName: adminName,
+          actorRole: 'Admin',
+          status: FaultStatus.assigned,
+        );
+      }
       _addTimelineEvent(
         reportId: reportId,
         title: 'Technician Assigned',
@@ -529,6 +641,7 @@ class DataRepository with ChangeNotifier {
         actorRole: 'Admin',
         status: FaultStatus.assigned,
       );
+      _demoNotifyAssignment(before: report, after: _reports[index]);
 
       notifyListeners();
     }
@@ -538,8 +651,12 @@ class DataRepository with ChangeNotifier {
     required String reportId,
     required FaultSeverity severity,
     required String adminName,
+    required String actorRole,
   }) async {
-    await _requireAuthorizedActor('Admin');
+    await _requireAuthorizedActor(actorRole);
+    if (actorRole.trim().toLowerCase() != 'admin') {
+      throw const PermissionException('Administrator access is required.');
+    }
     final index = _reports.indexWhere((r) => r.reportId == reportId);
     if (index == -1) return;
     final updatedAt = DateTime.now();
@@ -620,6 +737,37 @@ class DataRepository with ChangeNotifier {
     return _reportTimelines[reportId] ?? [];
   }
 
+  /// Live, chronologically ordered (oldest first) audit trail for [reportId].
+  ///
+  /// With a real Firebase session this streams `/reports/{id}/activity`;
+  /// otherwise (demo mode) it re-emits the local timeline whenever it changes.
+  Stream<List<ActivityTimelineEvent>> watchReportHistory(String reportId) {
+    if (FirebaseService.isRealFirebase &&
+        FirebaseAuth.instance.currentUser != null) {
+      return _notificationGateway.watchActivity(reportId);
+    }
+    late final StreamController<List<ActivityTimelineEvent>> controller;
+    void emit() {
+      if (!controller.isClosed) {
+        controller.add(
+          sortActivityChronologically(getTimelineForReport(reportId)),
+        );
+      }
+    }
+
+    controller = StreamController<List<ActivityTimelineEvent>>(
+      onListen: () {
+        addListener(emit);
+        emit();
+      },
+      onCancel: () {
+        removeListener(emit);
+        return controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
   void _addTimelineEvent({
     required String reportId,
     required String title,
@@ -631,7 +779,10 @@ class DataRepository with ChangeNotifier {
     final list = _reportTimelines.putIfAbsent(reportId, () => []);
     list.add(
       ActivityTimelineEvent(
-        id: 'act-${DateTime.now().millisecondsSinceEpoch}',
+        // Unique even for events created within the same clock tick, so a
+        // second event can never overwrite (and, under the append-only rules,
+        // be rejected as an update of) an earlier audit entry.
+        id: _newActivityId(),
         reportId: reportId,
         title: title,
         description: description,
@@ -657,21 +808,519 @@ class DataRepository with ChangeNotifier {
 
   // --- Notifications ---
 
-  int get unreadNotificationCount =>
-      _notifications.where((n) => !n.isRead).length;
+  /// The signed-in user's inbox (loading / error / action-error state).
+  NotificationStore get notificationStore => _notificationStore;
 
-  Future<void> markNotificationAsRead(String id) async {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index != -1) {
-      _notifications[index] = _notifications[index].copyWith(isRead: true);
-      notifyListeners();
+  int get unreadNotificationCount => _notificationStore.unreadCount;
+
+  /// Binds the notification inbox to the signed-in user (`null` = signed out).
+  ///
+  /// With Firebase configured, only a real Firebase Auth session for [uid]
+  /// loads notifications; demo-role identities get empty state rather than a
+  /// permission-denied error (see [hasBackendSession]).
+  void bindNotificationUser(String? uid) {
+    _notificationStore.bindUser(
+      uid != null && hasBackendSession(uid) ? uid : null,
+    );
+  }
+
+  int _demoNotificationSequence = 0;
+
+  /// DEMO MODE ONLY: stands in for the backend, which creates notifications in
+  /// production (see `functions/`). It never writes when a real notification
+  /// gateway is in use, so a client can never notify itself or anyone else.
+  void _demoNotify({
+    required String recipientUid,
+    required String title,
+    required String body,
+    required String reportId,
+    required NotificationType type,
+  }) {
+    final backend = _notificationGateway;
+    if (backend is! InMemoryNotificationGateway || recipientUid.isEmpty) return;
+    backend.deliver(
+      NotificationItem(
+        // Fixed-width parts: notifications created in the same tick are ordered by
+        // id (newest first), so "...-000010" must sort after "...-000009".
+        id: 'demo-${DateTime.now().microsecondsSinceEpoch.toString().padLeft(17, '0')}-${(_demoNotificationSequence++).toString().padLeft(6, '0')}',
+        recipientUid: recipientUid,
+        title: title,
+        body: body,
+        reportId: reportId,
+        type: type.value,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportCreated`).
+  void _demoNotifyNewReport(ReportModel report) {
+    _demoNotify(
+      recipientUid: MockData.adminUser.uid,
+      title: report.isEmergency
+          ? 'Emergency Report Submitted'
+          : 'New Report Submitted',
+      body:
+          '${report.reportId} ${report.faultType.displayName} at ${report.address} needs review.',
+      reportId: report.reportId,
+      type: NotificationType.update,
+    );
+  }
+
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportUpdated`, assignment).
+  void _demoNotifyAssignment({
+    required ReportModel before,
+    required ReportModel after,
+  }) {
+    final technicianUid = after.assignedTechnicianUid;
+    if (technicianUid == null) return;
+    final technicianName = after.assignedTechnicianName ?? 'a technician';
+    if (before.status == FaultStatus.pending) {
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Report Approved',
+        body:
+            'Your report ${after.reportId} has been verified by admin and is now assigned.',
+        reportId: after.reportId,
+        type: NotificationType.approval,
+      );
+    }
+    _demoNotify(
+      recipientUid: after.reporterUid,
+      title: 'Technician Assigned',
+      body:
+          'Your report ${after.reportId} has been assigned to $technicianName.',
+      reportId: after.reportId,
+      type: NotificationType.assignment,
+    );
+    _demoNotify(
+      recipientUid: technicianUid,
+      title: 'New Job Assigned',
+      body:
+          'Report ${after.reportId} at ${after.address} has been assigned to you.',
+      reportId: after.reportId,
+      type: NotificationType.assignment,
+    );
+  }
+
+  /// DEMO MODE ONLY - mirrors `functions/` (`onReportUpdated`, repair status).
+  void _demoNotifyRepairStatus({
+    required ReportModel before,
+    required ReportModel after,
+  }) {
+    final technicianName = after.assignedTechnicianName ?? 'a technician';
+    if (before.status == FaultStatus.assigned &&
+        after.status == FaultStatus.ongoing) {
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Repair Started',
+        body: 'Repair work has started on your report ${after.reportId}.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+    } else if (after.status == FaultStatus.completed) {
+      // The reporter cannot verify their own repair, so they are informed;
+      // citizens in the same service area are asked to verify.
+      _demoNotify(
+        recipientUid: after.reporterUid,
+        title: 'Repair Completed',
+        body:
+            'Your report ${after.reportId} has been marked completed. Nearby residents may be asked to confirm the repair.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+      _demoNotify(
+        recipientUid: MockData.adminUser.uid,
+        title: 'Repair Completed',
+        body: '${after.reportId} was marked completed by $technicianName.',
+        reportId: after.reportId,
+        type: NotificationType.update,
+      );
+      final neighbour = MockData.citizenUser;
+      if (neighbour.assignedArea == after.assignedArea &&
+          neighbour.uid != after.reporterUid &&
+          neighbour.uid != after.assignedTechnicianUid) {
+        _demoNotify(
+          recipientUid: neighbour.uid,
+          title: 'Verify Repair',
+          body:
+              'Repair completed for ${after.reportId}. Please verify whether the issue has been resolved.',
+          reportId: after.reportId,
+          type: NotificationType.verification,
+        );
+      }
     }
   }
 
-  Future<void> markAllNotificationsAsRead() async {
-    for (int i = 0; i < _notifications.length; i++) {
-      _notifications[i] = _notifications[i].copyWith(isRead: true);
+  /// Unique, time-ordered audit id (microsecond clock + a process counter so
+  /// events created in the same tick never collide).
+  ///
+  /// Both parts are zero-padded to a fixed width: events created in the same
+  /// clock tick (web clocks only have millisecond resolution) are ordered by
+  /// id, and "...-000010" must sort after "...-000009".
+  static String _newActivityId() {
+    final tick = DateTime.now().microsecondsSinceEpoch.toString().padLeft(
+      17,
+      '0',
+    );
+    final sequence = (_activitySequence++).toString().padLeft(6, '0');
+    return 'act-$tick-$sequence';
+  }
+
+  Future<void> markNotificationAsRead(String id) =>
+      _notificationStore.markAsRead(id);
+
+  Future<void> markAllNotificationsAsRead() =>
+      _notificationStore.markAllAsRead();
+
+  // --- Community Verification & Disputes (Member 7) ---
+
+  List<VerificationVoteModel> getVerificationsForReport(String reportId) {
+    return List.unmodifiable(_reportVerifications[reportId] ?? const []);
+  }
+
+  List<DisputeRecordModel> getDisputesForReport(String reportId) {
+    return List.unmodifiable(_reportDisputes[reportId] ?? const []);
+  }
+
+  bool hasUserVotedOnReport({
+    required String reportId,
+    required String userUid,
+  }) {
+    final normalizedUid = userUid.trim();
+    final hasVerified =
+        _reportVerifications[reportId]?.any(
+          (v) => v.voterUid.trim() == normalizedUid,
+        ) ??
+        false;
+    final hasDisputed =
+        _reportDisputes[reportId]?.any(
+          (d) => d.voterUid.trim() == normalizedUid,
+        ) ??
+        false;
+    return hasVerified || hasDisputed;
+  }
+
+  /// Returns completed reports eligible for community verification within [radiusKm].
+  List<ReportModel> getCompletedReportsNearby({
+    required double latitude,
+    required double longitude,
+    double? radiusKm,
+  }) {
+    final effectiveRadiusKm =
+        radiusKm ?? CommunityVerificationService.defaultRadiusKm;
+    return _reports.where((report) {
+      if (report.status != FaultStatus.completed) return false;
+      final dist = CommunityVerificationService.calculateDistanceKm(
+        startLatitude: latitude,
+        startLongitude: longitude,
+        endLatitude: report.latitude,
+        endLongitude: report.longitude,
+      );
+      return dist <= effectiveRadiusKm;
+    }).toList();
+  }
+
+  Future<void> submitCommunityVerification({
+    required ReportModel report,
+    required UserModel voter,
+    String? note,
+    double? userLatitude,
+    double? userLongitude,
+    double radiusKm = 0,
+  }) async {
+    final effectiveRadius = radiusKm > 0
+        ? radiusKm
+        : CommunityVerificationService.defaultRadiusKm;
+
+    final submissionKey = 'verify_${report.reportId}_${voter.uid}';
+    if (_submissionsInFlight.contains(submissionKey)) {
+      throw const ValidationException(
+        'A verification submission is already in progress.',
+      );
     }
-    notifyListeners();
+    _submissionsInFlight.add(submissionKey);
+
+    try {
+      final alreadyVoted = hasUserVotedOnReport(
+        reportId: report.reportId,
+        userUid: voter.uid,
+      );
+
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: report,
+        user: voter,
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+        hasAlreadyVoted: alreadyVoted,
+        radiusKm: effectiveRadius,
+      );
+
+      if (!eligibility.isEligible) {
+        throw ValidationException(
+          eligibility.reason ?? 'You are not eligible to verify this repair.',
+        );
+      }
+
+      final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+      if (index == -1) {
+        throw const DatabaseException('Report not found.');
+      }
+
+      final currentReport = _reports[index];
+      final newCount = currentReport.verificationCount + 1;
+      final vote = VerificationVoteModel(
+        voterUid: voter.uid,
+        voterName: voter.displayName,
+        reportId: report.reportId,
+        createdAt: DateTime.now(),
+        note: note,
+      );
+
+      final activity = ActivityTimelineEvent(
+        id: _newActivityId(),
+        reportId: report.reportId,
+        title: 'Community Verification Confirmed',
+        description:
+            '${voter.displayName} confirmed repair completion.${note != null && note.isNotEmpty ? ' Note: "$note"' : ''}',
+        actorName: voter.displayName,
+        actorRole: 'Citizen Verification',
+        status: FaultStatus.completed,
+        timestamp: DateTime.now(),
+      );
+
+      await _communityVerificationGateway.submitVerification(
+        report: currentReport,
+        vote: vote,
+        activity: activity,
+        newVerificationCount: newCount,
+      );
+
+      // Always remember this device's vote so duplicate submits are blocked.
+      _reportVerifications.putIfAbsent(report.reportId, () => []).add(vote);
+
+      // Live Firebase: counters, activity, and notifications come from Cloud
+      // Functions + report snapshots — do not invent them locally.
+      // Demo mode has no backend, so it applies the optimistic mirror here.
+      if (!FirebaseService.isRealFirebase) {
+        _reports[index] = currentReport.copyWith(
+          verificationCount: newCount,
+          updatedAt: DateTime.now(),
+        );
+
+        _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+        if (newCount >= CommunityVerificationService.confirmationThreshold &&
+            currentReport.verificationCount <
+                CommunityVerificationService.confirmationThreshold) {
+          _addTimelineEvent(
+            reportId: report.reportId,
+            title: 'Community Verified',
+            description:
+                '${CommunityVerificationService.confirmationThreshold} nearby citizens confirmed the repair is complete.',
+            actorName: 'Community',
+            actorRole: 'Citizen Verification',
+            status: FaultStatus.completed,
+          );
+
+          _demoNotify(
+            recipientUid: currentReport.reporterUid,
+            title: 'Repair Verified',
+            body:
+                'Community confirmed resolution for your report ${report.reportId}.',
+            reportId: report.reportId,
+            type: NotificationType.verification,
+          );
+          final technicianUid = currentReport.assignedTechnicianUid;
+          if (technicianUid != null) {
+            _demoNotify(
+              recipientUid: technicianUid,
+              title: 'Repair Verified by Community',
+              body:
+                  '${CommunityVerificationService.confirmationThreshold} nearby '
+                  'citizens confirmed your repair on ${report.reportId} is '
+                  'complete.',
+              reportId: report.reportId,
+              type: NotificationType.verification,
+            );
+          }
+          _demoNotify(
+            recipientUid: MockData.adminUser.uid,
+            title: 'Repair Verified by Community',
+            body:
+                'Report ${report.reportId} reached the community verification '
+                'threshold.',
+            reportId: report.reportId,
+            type: NotificationType.verification,
+          );
+        }
+      }
+
+      notifyListeners();
+    } finally {
+      _submissionsInFlight.remove(submissionKey);
+    }
+  }
+
+  Future<void> submitCommunityDispute({
+    required ReportModel report,
+    required UserModel voter,
+    required String reason,
+    Uint8List? evidenceBytes,
+    String? contentType,
+    double? userLatitude,
+    double? userLongitude,
+    double radiusKm = 0,
+  }) async {
+    final effectiveRadius = radiusKm > 0
+        ? radiusKm
+        : CommunityVerificationService.defaultRadiusKm;
+
+    final submissionKey = 'dispute_${report.reportId}_${voter.uid}';
+    if (_submissionsInFlight.contains(submissionKey)) {
+      throw const ValidationException(
+        'A dispute submission is already in progress.',
+      );
+    }
+    _submissionsInFlight.add(submissionKey);
+
+    try {
+      if (reason.trim().isEmpty) {
+        throw const ValidationException('A dispute reason is required.');
+      }
+
+      final alreadyVoted = hasUserVotedOnReport(
+        reportId: report.reportId,
+        userUid: voter.uid,
+      );
+
+      final eligibility = CommunityVerificationService.checkEligibility(
+        report: report,
+        user: voter,
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+        hasAlreadyVoted: alreadyVoted,
+        radiusKm: effectiveRadius,
+      );
+
+      if (!eligibility.isEligible) {
+        throw ValidationException(
+          eligibility.reason ?? 'You are not eligible to dispute this repair.',
+        );
+      }
+
+      final index = _reports.indexWhere((r) => r.reportId == report.reportId);
+      if (index == -1) {
+        throw const DatabaseException('Report not found.');
+      }
+
+      final currentReport = _reports[index];
+      final newDisputeCount = currentReport.disputeCount + 1;
+
+      String? evidenceUrl;
+      if (evidenceBytes != null && evidenceBytes.isNotEmpty) {
+        if (evidenceBytes.length > 10 * 1024 * 1024) {
+          throw const ValidationException(
+            'Choose an evidence photo smaller than 10 MB.',
+          );
+        }
+        evidenceUrl = await _communityVerificationGateway.uploadDisputePhoto(
+          reportId: report.reportId,
+          voterUid: voter.uid,
+          bytes: evidenceBytes,
+          contentType: contentType ?? 'image/jpeg',
+        );
+      }
+
+      final dispute = DisputeRecordModel(
+        voterUid: voter.uid,
+        voterName: voter.displayName,
+        reportId: report.reportId,
+        reason: reason.trim(),
+        evidenceImageUrl: evidenceUrl,
+        createdAt: DateTime.now(),
+      );
+
+      final activity = ActivityTimelineEvent(
+        id: _newActivityId(),
+        reportId: report.reportId,
+        title: 'Dispute Raised',
+        description:
+            'A dispute has been raised by ${voter.displayName}. Reason: "${reason.trim()}". Status reopened for Admin review.',
+        actorName: voter.displayName,
+        actorRole: 'Citizen Dispute',
+        status: FaultStatus.disputed,
+        timestamp: DateTime.now(),
+      );
+
+      await _communityVerificationGateway.submitDispute(
+        report: currentReport,
+        dispute: dispute,
+        activity: activity,
+        newDisputeCount: newDisputeCount,
+      );
+
+      _reportDisputes.putIfAbsent(report.reportId, () => []).add(dispute);
+
+      // Live Firebase: status flip, counters, activity, and notifications are
+      // owned by Cloud Functions. Demo mode mirrors that locally.
+      if (!FirebaseService.isRealFirebase) {
+        _reports[index] = currentReport.copyWith(
+          status: FaultStatus.disputed,
+          disputeCount: newDisputeCount,
+          updatedAt: DateTime.now(),
+        );
+
+        _reportTimelines.putIfAbsent(report.reportId, () => []).add(activity);
+
+        // Notifications for a dispute — demo backend only.
+        _demoNotify(
+          recipientUid: MockData.adminUser.uid,
+          title: 'Dispute Raised',
+          body:
+              'Dispute raised on ${report.reportId} by ${voter.displayName}. '
+              'Case reopened for Admin review.',
+          reportId: report.reportId,
+          type: NotificationType.dispute,
+        );
+        final technicianUid = currentReport.assignedTechnicianUid;
+        if (technicianUid != null) {
+          _demoNotify(
+            recipientUid: technicianUid,
+            title: 'Repair Disputed',
+            body:
+                'Completed repair on ${report.reportId} was disputed by the '
+                'community and reopened for review.',
+            reportId: report.reportId,
+            type: NotificationType.dispute,
+          );
+        }
+        if (currentReport.reporterUid.isNotEmpty &&
+            currentReport.reporterUid != voter.uid) {
+          _demoNotify(
+            recipientUid: currentReport.reporterUid,
+            title: 'Dispute Opened',
+            body:
+                'A community dispute has been raised on your report '
+                '${report.reportId}. Admin is reviewing.',
+            reportId: report.reportId,
+            type: NotificationType.dispute,
+          );
+        }
+        _demoNotify(
+          recipientUid: voter.uid,
+          title: 'Dispute Submitted',
+          body:
+              'Your dispute on ${report.reportId} was submitted to the Water '
+              'Board.',
+          reportId: report.reportId,
+          type: NotificationType.dispute,
+        );
+      }
+
+      notifyListeners();
+    } finally {
+      _submissionsInFlight.remove(submissionKey);
+    }
   }
 }

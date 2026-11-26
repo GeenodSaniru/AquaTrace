@@ -5,11 +5,13 @@ rules_version = '2';
  *
  * Collections (from README / Dart models):
  *   /users/{uid}
- *   /users/{uid}/notifications/{notificationId}
+ *   /users/{uid}/notifications/{notificationId}   // server-created, owner marks read
+ *   /users/{uid}/fcmTokens/{token}                // owner-managed push tokens
+ *   /users/{uid}/settings/notifications           // owner-managed notification choices
  *   /reports/{reportId}
  *   /reports/{reportId}/activity/{activityId}
- *   /reports/{reportId}/verifications/{voterUid}   // planned Member 7
- *   /reports/{reportId}/disputes/{voterUid}        // planned Member 7
+ *   /reports/{reportId}/verifications/{voterUid}   // Member 7 (counted by functions/)
+ *   /reports/{reportId}/disputes/{voterUid}        // Member 7 (counted by functions/)
  *
  * Trust model:
  *   - Firebase Auth uid is the only client identity signal.
@@ -110,10 +112,6 @@ service cloud.firestore {
       ];
     }
 
-    function validNotificationType(type) {
-      return type in ['assignment', 'verification', 'approval', 'dispute', 'update'];
-    }
-
     // --------------------------------------------------------------------------
     // /users/{uid}
     // --------------------------------------------------------------------------
@@ -188,12 +186,73 @@ service cloud.firestore {
           && onlyChanging(['isRead'])
           && request.resource.data.isRead is bool;
 
-        // Notification creation is a trusted server/admin action (assignment, disputes).
-        allow create: if isAdmin()
-          && request.resource.data.recipientUid == uid
-          && validNotificationType(request.resource.data.type);
+        // Notifications are created ONLY by trusted backend code (Cloud
+        // Functions / Admin SDK, which bypass these rules). No client - not
+        // even an admin - may create one, so a client can never send itself
+        // (or anyone else) a notification. See functions/README.md.
+        allow create: if false;
 
         allow delete: if isSelf(uid) || isAdmin();
+      }
+
+      // ------------------------------------------------------------------------
+      // /users/{uid}/fcmTokens/{token}  - push device tokens (Member 8)
+      //
+      // The owner registers / refreshes / removes their own device tokens.
+      // The document id IS the token. The backend (Admin SDK) reads them to
+      // address pushes; clients can only read their own.
+      // ------------------------------------------------------------------------
+      match /fcmTokens/{token} {
+        allow read: if isSelf(uid);
+
+        allow create: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'token',
+            'platform',
+            'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.token == token
+          && request.resource.data.platform in ['android', 'ios', 'macos']
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isSelf(uid)
+          && request.resource.data.token == resource.data.token
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.platform in ['android', 'ios', 'macos']
+          && request.resource.data.updatedAt == request.time
+          && onlyChanging(['platform', 'updatedAt']);
+
+        allow delete: if isSelf(uid);
+      }
+
+      // ------------------------------------------------------------------------
+      // /users/{uid}/settings/notifications  - notification choices (Member 8)
+      //
+      // The owner mirrors the Settings switches here so the backend can honour
+      // them (read with the Admin SDK). Only this one document, only booleans.
+      // ------------------------------------------------------------------------
+      match /settings/{settingId} {
+        allow read: if isSelf(uid);
+
+        allow create, update: if isSelf(uid)
+          && settingId == 'notifications'
+          && request.resource.data.keys().hasOnly([
+            'pushEnabled',
+            'reportUpdates',
+            'repairVerification',
+            'nearbyFaults',
+            'updatedAt'
+          ])
+          && request.resource.data.pushEnabled is bool
+          && request.resource.data.repairVerification is bool
+          && request.resource.data.nearbyFaults is bool
+          && (!('reportUpdates' in request.resource.data)
+              || request.resource.data.reportUpdates is bool)
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if isSelf(uid);
       }
     }
 
@@ -342,7 +401,12 @@ service cloud.firestore {
       // Activity timeline (append-mostly audit trail)
       // ------------------------------------------------------------------------
       match /activity/{activityId} {
-        allow read: if isSignedIn();
+        // Same audience as the parent report: admins, citizens, and the
+        // technician assigned to it - so history cannot leak a report the
+        // reader could not open.
+        allow read: if isAdmin()
+          || isCitizen()
+          || isAssignedTechnician(reportDoc(reportId).data);
 
         // Actors may append a timeline event for actions they are allowed to take.
         allow create: if isSignedIn()
@@ -370,46 +434,92 @@ service cloud.firestore {
       // Counters / status flips must be applied by Cloud Functions (Admin SDK).
       // ------------------------------------------------------------------------
       match /verifications/{voterUid} {
-        allow read: if isSignedIn();
+        // Own vote, report owner, assigned technician, or admin.
+        allow read: if isAdmin()
+          || isAssignedTechnician(reportDoc(reportId).data)
+          || (
+            isSignedIn()
+            && (
+              voterUid == request.auth.uid
+              || reportDoc(reportId).data.reporterUid == request.auth.uid
+            )
+          );
 
         allow create: if isCitizen()
           && voterUid == request.auth.uid
           && reportExists(reportId)
           && reportDoc(reportId).data.status == 'completed'
+          // Reporter and assigned technician cannot audit their own repair.
+          && reportDoc(reportId).data.reporterUid != request.auth.uid
+          && (
+            !('assignedTechnicianUid' in reportDoc(reportId).data)
+            || reportDoc(reportId).data.assignedTechnicianUid == null
+            || reportDoc(reportId).data.assignedTechnicianUid != request.auth.uid
+          )
           && request.resource.data.keys().hasOnly([
             'voterUid',
+            'voterName',
             'reportId',
             'createdAt',
             'note'
           ])
           && request.resource.data.voterUid == request.auth.uid
-          && request.resource.data.reportId == reportId;
+          && request.resource.data.reportId == reportId
+          && (!('voterName' in request.resource.data)
+              || request.resource.data.voterName is string);
+
+        // counted / countedAs / rejected are written by the
+        // onVerificationCreated Cloud Function (Admin SDK); clients cannot.
 
         allow update, delete: if false;
       }
 
       // ------------------------------------------------------------------------
       // Community disputes — one dispute document per citizen uid
-      // Auto-reopen to disputed must be performed by Cloud Functions.
+      // Counting the dispute and the auto-reopen to disputed are performed by the
+      // onDisputeCreated Cloud Function (Admin SDK), never by clients.
       // ------------------------------------------------------------------------
       match /disputes/{voterUid} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin()
+          || isAssignedTechnician(reportDoc(reportId).data)
+          || (
+            isSignedIn()
+            && (
+              voterUid == request.auth.uid
+              || reportDoc(reportId).data.reporterUid == request.auth.uid
+            )
+          );
 
         allow create: if isCitizen()
           && voterUid == request.auth.uid
           && reportExists(reportId)
-          && reportDoc(reportId).data.status == 'completed'
+          && reportDoc(reportId).data.status in ['completed', 'disputed']
+          && reportDoc(reportId).data.reporterUid != request.auth.uid
+          && (
+            !('assignedTechnicianUid' in reportDoc(reportId).data)
+            || reportDoc(reportId).data.assignedTechnicianUid == null
+            || reportDoc(reportId).data.assignedTechnicianUid != request.auth.uid
+          )
           && request.resource.data.keys().hasOnly([
             'voterUid',
+            'voterName',
             'reportId',
             'reason',
+            'evidenceImageUrl',
             'createdAt'
           ])
           && request.resource.data.voterUid == request.auth.uid
           && request.resource.data.reportId == reportId
-          && request.resource.data.reason is string;
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() > 0
+          && request.resource.data.reason.size() <= 2000
+          && (!('voterName' in request.resource.data)
+              || request.resource.data.voterName is string)
+          && (!('evidenceImageUrl' in request.resource.data)
+              || request.resource.data.evidenceImageUrl is string);
 
-        allow update, delete: if isAdmin();
+        // Immutable from clients; Admin SDK / Cloud Functions may still mutate.
+        allow update, delete: if false;
       }
     }
 

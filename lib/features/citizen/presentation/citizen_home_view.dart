@@ -216,6 +216,54 @@ class CitizenHomeView extends StatelessWidget {
                     child: AppReportCardTile(report: report),
                   ),
                 ),
+
+            // Nearby Completed Repairs Pending Community Verification
+            ...() {
+              final completedPending = dataRepo.reports
+                  .where((r) => r.status == FaultStatus.completed)
+                  .toList();
+              if (completedPending.isEmpty) return <Widget>[];
+              return <Widget>[
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_outlined,
+                      size: 18,
+                      color: AppColors.statusCompleted,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Repairs Awaiting Verification',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...completedPending
+                    .take(2)
+                    .map(
+                      (report) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10.0),
+                        child: AppReportCardTile(
+                          report: report,
+                          onTap: () {
+                            Navigator.of(context).pushNamed(
+                              AppRouter.verifyRepair,
+                              arguments: report.reportId,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+              ];
+            }(),
           ],
         ),
       ),

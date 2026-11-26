@@ -6,11 +6,14 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/citizen/presentation/citizen_main_shell.dart';
 import '../../features/map/presentation/shared_map_view.dart';
+import '../../features/notifications/presentation/activity_history_screen.dart';
+import '../../features/notifications/presentation/report_link_screen.dart';
 import '../../features/notifications/presentation/shared_notifications_view.dart';
 import '../../features/profile/presentation/shared_profile_view.dart';
 import '../../features/reports/presentation/citizen_report_form_screen.dart';
 import '../../features/reports/presentation/shared_reports_view.dart';
 import '../../features/technician/presentation/technician_main_shell.dart';
+import '../../features/verification/presentation/citizen_verification_screen.dart';
 
 /// Centralized routing configuration for AquaTrace.
 class AppRouter {
@@ -30,9 +33,36 @@ class AppRouter {
   static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String reportFault = '/reports/new';
+  static const String verifyRepair = '/verify-repair';
+
+  /// Report / job detail reached from a notification or push message.
+  /// `arguments`: the report id (`String`).
+  static const String reportDetail = '/reports/detail';
+
+  /// Activity history of one report. `arguments`: the report id (`String`).
+  static const String reportActivity = '/reports/activity';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
+      case reportDetail:
+        final arguments = settings.arguments;
+        final link = arguments is ReportLinkArgs
+            ? arguments
+            : ReportLinkArgs(arguments is String ? arguments : '');
+        return MaterialPageRoute(
+          builder: (_) =>
+              ReportLinkScreen(reportId: link.reportId, type: link.type),
+          settings: settings,
+        );
+      case reportActivity:
+        return MaterialPageRoute(
+          builder: (_) => ActivityHistoryScreen(
+            reportId: settings.arguments is String
+                ? settings.arguments! as String
+                : '',
+          ),
+          settings: settings,
+        );
       case login:
         return MaterialPageRoute(
           builder: (_) => const LoginScreen(),
@@ -86,6 +116,17 @@ class AppRouter {
       case reportFault:
         return MaterialPageRoute<bool>(
           builder: (_) => const CitizenReportFormScreen(),
+          settings: settings,
+        );
+      case verifyRepair:
+        final args = settings.arguments;
+        final reportId = args is String
+            ? args
+            : (args is Map && args['reportId'] != null
+                  ? args['reportId'].toString()
+                  : 'AT-2026-00126');
+        return MaterialPageRoute(
+          builder: (_) => CitizenVerificationScreen(reportId: reportId),
           settings: settings,
         );
       default:
