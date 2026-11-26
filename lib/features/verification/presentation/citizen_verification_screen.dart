@@ -63,7 +63,9 @@ class _CitizenVerificationScreenState extends State<CitizenVerificationScreen> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _useFallbackLocation('Location service disabled. Using assigned area.');
+        _clearLocation(
+          'Location services are off. Turn on GPS to verify nearby repairs.',
+        );
         return;
       }
 
@@ -71,16 +73,16 @@ class _CitizenVerificationScreenState extends State<CitizenVerificationScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _useFallbackLocation(
-            'Location permission denied. Using assigned area.',
+          _clearLocation(
+            'Location permission denied. Allow location access to verify nearby repairs.',
           );
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _useFallbackLocation(
-          'Location permanently denied. Using assigned area profile.',
+        _clearLocation(
+          'Location permanently denied. Enable location in settings to verify nearby repairs.',
         );
         return;
       }
@@ -101,16 +103,18 @@ class _CitizenVerificationScreenState extends State<CitizenVerificationScreen> {
         });
       }
     } catch (_) {
-      _useFallbackLocation('GPS unavailable. Using default area coordinates.');
+      _clearLocation(
+        'GPS unavailable. Move closer with location enabled to verify or dispute.',
+      );
     }
   }
 
-  void _useFallbackLocation(String reason) {
+  void _clearLocation(String reason) {
     if (!mounted) return;
-    // Default Colombo area coordinates matching mock citizen Amal Perera
+    // Fail closed: never invent coordinates that would bypass proximity checks.
     setState(() {
-      _userLatitude = 6.8912;
-      _userLongitude = 79.8554;
+      _userLatitude = null;
+      _userLongitude = null;
       _isLoadingLocation = false;
       _locationStatusMessage = reason;
     });

@@ -1,0 +1,138 @@
+AquaTrace — Remaining tasks & bug fixes
+=======================================
+Updated: 2026-11-25
+Branch baseline: geenod
+Status: Members 1–8 feature code is largely complete. Code polish from this
+        pass is checked below. Left work is mostly Storage enable, Functions
+        deploy, live device QA, and optional product gaps.
+
+
+------------------------------------------------------------------------------
+A. BUGS / CODE FIXES
+------------------------------------------------------------------------------
+
+[x] A1. Admin dashboard ListTile debug assert (Member 5)
+    - Fixed: AppCard now uses Material so ListTile/InkWell ink is visible.
+    - File: lib/core/widgets/app_card.dart
+
+[x] A2. Bugbot-class findings triaged (PR #18 — inferred + fixed in code)
+    - Exact Bugbot text needs Cursor/gh auth; high-confidence fixes applied:
+      * GPS no longer falls back to fake Colombo coords
+      * Firestore rules block reporter/technician votes; tighten reads;
+        disputes immutable for clients
+      * Live Firebase no longer invents verification/dispute counters locally
+    - URL: https://github.com/GeenodSaniru/AquaTrace/pull/18
+
+[ ] A3. Cloud Functions Firestore glue never run live
+    - File: functions/index.js
+    - Action: Deploy functions (Blaze) + emulator plan in functions/README.md
+
+
+------------------------------------------------------------------------------
+B. FIREBASE / DEPLOY (HIGH PRIORITY)
+------------------------------------------------------------------------------
+
+[ ] B1. Deploy Cloud Functions to aquatrace-92e2e
+    - Requires: Blaze plan, region matching Firestore
+    - Commands:
+        cd functions && npm install
+        firebase deploy --only functions --project aquatrace-92e2e
+
+[x] B2. Deploy latest firestore.rules
+    - Deployed 2026-11-25 to aquatrace-92e2e (includes verification/dispute
+      hardenings from this pass)
+
+[ ] B3. Enable Firebase Storage + deploy storage.rules
+    - Blocked: Storage not set up in Console for aquatrace-92e2e
+    - Action: Console → Storage → Get Started, then:
+        firebase deploy --only storage --project aquatrace-92e2e
+    - Then live E2E uploads (reports, avatars, repair photos)
+
+[ ] B4. Run functions verification plan
+    - Source: functions/README.md
+
+[ ] B5. iOS / macOS push setup
+    - APNs auth key + Push Notifications capability
+
+[ ] B6. Optional web push
+    - Service worker + VAPID key
+
+[ ] B7. Physical-device FCM QA
+    - Permission, token lifecycle, FG/BG/terminated taps, cold-start links
+
+[ ] B8. Live role E2E (real Auth accounts, not demo-only)
+    - Citizen / admin / technician / verify / dispute / notifications
+
+
+------------------------------------------------------------------------------
+C. PRODUCT / FEATURE GAPS
+------------------------------------------------------------------------------
+
+[ ] C1. Google Sign-In (stub only today)
+[ ] C2. Apple Sign-In (stub only today)
+[ ] C3. Nearby faults by GPS (optional; verify UI now requires real GPS)
+[ ] C4. Weekly email digest (toggle only)
+[ ] C5. Usage analytics (not wired)
+[ ] C6. Data export (not implemented)
+[ ] C7. Release Android API-key SHA-1 (debug only so far)
+[ ] C8. Optional FCM register() API migration
+
+
+------------------------------------------------------------------------------
+D. GIT / PROCESS
+------------------------------------------------------------------------------
+
+[ ] D1. Merge PR #18 (test → main) after final review
+    - URL: https://github.com/GeenodSaniru/AquaTrace/pull/18
+
+[ ] D2. Sync main with geenod after PR merge (if needed)
+
+[ ] D3. GitHub Secret Scanning (client AIza keys)
+    - Expected FlutterFire client keys — dismiss false positive if desired
+
+[ ] D4. Re-run full suites after next large merge
+    - flutter test ; cd functions && npm test
+    - Focused 2026-11-25: community_verification + admin_workflow passed
+
+
+------------------------------------------------------------------------------
+E. ENVIRONMENT / DEVICE QA (NOT CODE DEFECTS)
+------------------------------------------------------------------------------
+
+[ ] E1. Android emulator RAM on this Mac
+[ ] E2. Physical camera / gallery permission paths
+[ ] E3. Physical GPS permission + map current-location
+[ ] E4. macOS desktop Flutter run (SPM / Xcode linker)
+
+
+------------------------------------------------------------------------------
+F. ALREADY DONE (do not re-open unless regressions)
+------------------------------------------------------------------------------
+
+[x] Profile conflict markers removed
+[x] DataRepository restored (notifications + verification APIs)
+[x] NotificationType / timeline helpers restored
+[x] Destructive GitHub Desktop stashes dropped
+[x] Critical merge fix pushed: f4261b6 on geenod
+[x] AppCard Material fix (A1)
+[x] Verification GPS fail-closed (no fake coords)
+[x] Firestore rules harden vote/dispute create + read + immutability
+[x] Live Firebase skips optimistic vote/dispute counters
+[x] firestore.rules deployed to aquatrace-92e2e (2026-11-25)
+[x] flutter analyze — no issues on touched paths
+[x] Focused tests — community_verification + admin_workflow passed
+
+
+------------------------------------------------------------------------------
+SUGGESTED ORDER (next)
+------------------------------------------------------------------------------
+
+1. B3     Enable Storage in Console + deploy storage.rules
+2. B1/A3  Deploy Cloud Functions (Blaze) + run verification plan
+3. D1     Merge PR #18 → main
+4. B7–B8  Live device / role E2E
+5. C1–C2  OAuth if required for release
+6. C3–C8  Optional product polish
+
+
+End of list.
